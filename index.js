@@ -1,4 +1,4 @@
-import { config } from './config.js'
+import { config } from './src/utils/config.js'
 import { Bot } from 'grammy'
 import dotenv from 'dotenv'
 dotenv.config()
