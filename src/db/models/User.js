@@ -1,9 +1,8 @@
-import { DataTypes, Model } from 'sequelize'
-import sequelize from '../../config/database.js'
+import { DataTypes } from 'sequelize'
+import sequelize from './index.js' // Предполагается, что у вас есть файл подключения к базе данных
 
-class User extends Model {}
-
-User.init(
+const User = sequelize.define(
+	'User',
 	{
 		id: {
 			type: DataTypes.INTEGER,
@@ -34,7 +33,6 @@ User.init(
 		},
 	},
 	{
-		sequelize,
 		tableName: 'users', // Имя таблицы
 		timestamps: false, // Отключаем автоматическое добавление полей `createdAt` и `updatedAt`
 		underscored: true, // Используем snake_case для названий колонок

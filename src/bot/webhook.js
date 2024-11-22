@@ -1,5 +1,4 @@
 import express from 'express'
-import { notifyNewTask } from './notifications/taskNotifications.js'
 
 const app = express()
 const PORT = 3001
@@ -11,7 +10,7 @@ let lastWebhookData = null
 app.use(express.json())
 
 // Endpoint для приема Webhook (POST)
-app.post('/webhook', async (req, res) => {
+app.post('/webhook', (req, res) => {
 	const event = req.headers['x-github-event'] // Тип события (например, "issues", "push")
 	const payload = req.body
 
@@ -24,12 +23,6 @@ app.post('/webhook', async (req, res) => {
 	console.log(`Получено событие: ${event}`)
 	console.log('Данные сохранены.')
 
-	// Обрабатываем события
-	if (event === 'issues' && payload.action === 'opened') {
-		console.log('Новая задача создана!')
-		// Вызываем функцию для уведомления о задаче
-		await notifyNewTask(payload.issue)
-	}
 	// Ответ GitHub для подтверждения получения
 	res.status(200).send('Webhook обработан.')
 })
