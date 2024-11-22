@@ -20,7 +20,7 @@ User.init(
 		},
 		github_token: {
 			type: DataTypes.STRING,
-			allowNull: false,
+			allowNull: true, // Теперь токен может быть null
 		},
 		created_at: {
 			type: DataTypes.DATE,
@@ -34,18 +34,18 @@ User.init(
 		},
 	},
 	{
-		sequelize,
-		tableName: 'users', // Имя таблицы
-		timestamps: false, // Отключаем автоматическое добавление полей `createdAt` и `updatedAt`
-		underscored: true, // Используем snake_case для названий колонок
+		sequelize: sequelize,
+		modelName: 'User',
+		tableName: 'users',
+		timestamps: false,
+		underscored: true,
 		indexes: [
 			{ fields: ['telegram_id'], unique: true },
-			{ fields: ['github_token'], unique: true },
+			{ fields: ['github_token'], unique: false },
 		],
 	}
 )
 
-// Обновление поля updated_at при каждом изменении записи
 User.beforeUpdate(user => {
 	user.updated_at = new Date()
 })
