@@ -4,7 +4,9 @@
 	"main": "index.js",
 	"type": "module",
 	"scripts": {
-		"dev": "nodemon index.js"
+		"start:bot": "node src/bot/bot.js",
+		"start:webhook": "node src/bot/webhook.js",
+		"dev": "concurrently \"npm run start:bot\" \"npm run start:webhook\""
 	},
 	"author": "",
 	"license": "ISC",
@@ -15,5 +17,8 @@
 		"express": "^4.21.1",
 		"grammy": "^1.32.0",
 		"nodemon": "^3.1.7"
+	},
+	"devDependencies": {
+		"concurrently": "^9.1.0"
 	}
 }
