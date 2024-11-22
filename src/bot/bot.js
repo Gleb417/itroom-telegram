@@ -13,6 +13,10 @@ const userStates = new Map(); // Состояния пользователей (
 registerCommands(bot, chatTokens, authState, userStates);
 
 // Запуск бота
-bot.start();
-console.log("Bot started.");
+try {
+  bot.start();
+  console.log("Bot started.");
+} catch {
+  console.log("Error");
+}
 export default bot;
