@@ -1,18 +1,11 @@
-import { Bot } from "grammy";
-import { authCommand } from "./commands/authCommand.js";
-import { config } from "../utils/config.js";
-import { tokenHandler } from "./commands/tokenHandler.js";
+import { Bot } from 'grammy'
+import { config } from '../utils/config.js'
 
 // Создаем бота
-const bot = new Bot(config.BOT_API_KEY);
-
-const chatTokens = new Map();
-
-// Регистрация команд
-bot.command("auth", (ctx) => authCommand(ctx, chatTokens));
-bot.on("message:text", (ctx) => tokenHandler(ctx, chatTokens));
+const bot = new Bot(config.BOT_API_KEY)
 
 // Запуск бота
-bot.start();
-console.log("Bot started.");
-export default bot;
+bot.start()
+console.log('Bot started.')
+
+export default bot

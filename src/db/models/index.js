@@ -1,5 +1,6 @@
-import sequelize from '../config/database.js'
+import sequelize from '../../config/database.js'
 import User from './User.js' // Импорт модели User
+import { Sequelize } from 'sequelize'
 
 const db = {
 	sequelize, // Подключение к базе данных
