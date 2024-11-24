@@ -1,22 +1,23 @@
 import { Bot } from 'grammy'
 import { registerCommands } from './commands/index.js'
+import { setupSession } from '../utils/session.js'
 import { config } from '../utils/config.js'
 
 // Создаем бота
 const bot = new Bot(config.BOT_API_KEY)
 
-const chatTokens = new Map()
-const authState = new Set()
-const userStates = new Map() // Состояния пользователей ("free" или "busy")
+// Настраиваем сессии
+setupSession(bot)
 
 // Регистрация команд
-registerCommands(bot, chatTokens, authState, userStates)
+registerCommands(bot)
 
 // Запуск бота
 try {
 	bot.start()
 	console.log('Bot started.')
-} catch {
-	console.log('Error')
+} catch (error) {
+	console.error('Error starting bot:', error)
 }
+
 export default bot
