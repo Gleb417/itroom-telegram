@@ -1,5 +1,5 @@
 import express from 'express'
-import { notifyNewTask } from './notifications/taskNotifications.js'
+import { notify } from './notifications/index.js'
 
 const app = express()
 const PORT = 3001
@@ -25,11 +25,21 @@ app.post('/webhook', async (req, res) => {
 	console.log('Данные сохранены.')
 
 	// Обрабатываем события
-	if (event === 'issues' && payload.action === 'opened') {
-		console.log('Новая задача создана!')
-		// Вызываем функцию для уведомления о задаче
-		await notifyNewTask(payload.issue)
+	if (event === 'issues') {
+		const { action, issue } = payload
+
+		if (action === 'opened') {
+			console.log('Новая задача создана!')
+			await notify('task', issue) // Уведомление о новой задаче
+		} else if (action === 'closed' || action === 'reopened') {
+			console.log(`Задача ${action === 'closed' ? 'закрыта' : 'переоткрыта'}!`)
+			await notify('status', { action }, issue) // Уведомление об изменении статуса
+		}
+	} else if (event === 'issue_comment' && payload.action === 'created') {
+		console.log('Добавлен новый комментарий к задаче!')
+		await notify('comment', payload.comment, payload.issue) // Уведомление о комментарии
 	}
+
 	// Ответ GitHub для подтверждения получения
 	res.status(200).send('Webhook обработан.')
 })
