@@ -8,6 +8,7 @@ export async function setUserKeyboard(ctx, state) {
       .text("/auth")
       .text("/help")
       .row()
+      .text("/project") // Добавляем команду /project
       .text("/other_command");
   } else if (state === "busy") {
     keyboard = new Keyboard().text("Завершить задачу").row();
