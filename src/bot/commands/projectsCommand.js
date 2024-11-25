@@ -109,7 +109,6 @@ export async function handleInlineQuery(ctx) {
       }
 
       const tasks = await getTasks(userToken, projectId);
-      console.log("Полученные задачи:", tasks);
 
       if (!tasks.length) {
         return ctx.reply("В этом проекте нет задач.");
@@ -127,7 +126,6 @@ export async function handleInlineQuery(ctx) {
     // Обработка задачи (показ всей информации о задаче)
     if (action.startsWith("task_")) {
       const taskId = action.split("_").slice(1).join("_"); // Получаем правильный taskId
-      console.log("Полученный taskId:", taskId);
 
       const task = await getTaskDetails(userToken, taskId);
 

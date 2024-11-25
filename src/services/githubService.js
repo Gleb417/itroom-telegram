@@ -50,8 +50,6 @@ async function getTasks(userToken, projectId) {
       }
     );
 
-    console.log("GraphQL response for tasks:", response.data);
-
     if (response.data.errors) {
       console.error("GraphQL ошибки:", response.data.errors);
       throw new Error("Ошибка GraphQL: " + response.data.errors[0]?.message);
@@ -204,10 +202,6 @@ async function getTaskDetails(userToken, taskId) {
 
     const variables = { taskId };
 
-    console.log("Отправка запроса на GitHub API:");
-    console.log("Query:", query);
-    console.log("Variables:", variables);
-
     const response = await axios.post(
       "https://api.github.com/graphql",
       { query, variables },
@@ -220,11 +214,8 @@ async function getTaskDetails(userToken, taskId) {
     );
 
     // Логируем весь ответ
-    console.log("Ответ от GitHub API:");
-    console.log(JSON.stringify(response.data, null, 2));
 
     const taskData = response.data.data.node.content;
-    console.log("Данные задачи:", JSON.stringify(taskData, null, 2));
 
     if (!taskData) {
       console.error("Задача не найдена. taskId:", taskId);
