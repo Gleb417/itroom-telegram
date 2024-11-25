@@ -12,7 +12,7 @@ import { helpCommand, addCommandDescription } from './helpCommand.js'
 export function registerCommands(
 	bot,
 	chatTokens,
-	authState,
+	authState = new Map(),
 	userStates = new Map()
 ) {
 	bot.command('help', helpCommand)
