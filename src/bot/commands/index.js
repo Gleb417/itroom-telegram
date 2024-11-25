@@ -9,7 +9,7 @@ import { cancelAuth } from './cancelAuth.js'
 import { retryAuth } from './retryAuth.js'
 import { helpCommand, addCommandDescription } from './helpCommand.js'
 
-export function registerCommands(
+export async function registerCommands(
 	bot,
 	chatTokens,
 	authState = new Map(),

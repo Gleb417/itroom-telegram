@@ -6,8 +6,12 @@ export async function tokenHandler(ctx, chatTokens, authState) {
 	const chatId = ctx.chat.id
 	const token = ctx.message.text.trim()
 
+	if (!authState) {
+		throw new Error('authState is not initialized.')
+	}
+
 	if (!authState.has(chatId)) {
-		return // Если чат не ожидает токен, игнорируем
+		authState.set(chatId, { step: 0 })
 	}
 
 	if (!token) {
