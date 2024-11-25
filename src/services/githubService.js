@@ -78,17 +78,71 @@ async function getTasks(userToken, projectId) {
 }
 
 async function getComments(userToken, issueId) {
+  const query = `
+	query($issueId: ID!) {
+	  node(id: $issueId) {
+		... on ProjectV2Item {
+		  content {
+			... on Issue {
+			  comments(first: 100) {
+				nodes {
+				  id
+				  body
+				  author {
+					login
+				  }
+				  createdAt
+				}
+			  }
+			}
+		  }
+		}
+	  }
+	}
+  `;
+
+  const variables = { issueId };
+
   try {
-    const response = await axios.get(
-      `https://api.github.com/issues/${issueId}/comments`,
+    const response = await axios.post(
+      "https://api.github.com/graphql",
+      { query, variables },
       {
-        headers: { Authorization: `token ${userToken}` },
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+          Accept: "application/vnd.github.v3+json",
+        },
       }
     );
-    return response.data;
+
+    if (response.data.errors) {
+      console.error("GraphQL ошибки:", response.data.errors);
+      throw new Error("Ошибка GraphQL: " + response.data.errors[0]?.message);
+    }
+
+    // Проверяем, что node существует
+    const node = response.data?.data?.node;
+
+    if (!node || !node.content || !node.content.comments) {
+      console.log(
+        "Комментарии для задачи не найдены или задача не существует."
+      );
+      return [];
+    }
+
+    const comments = node.content.comments.nodes;
+
+    return comments.map((comment) => ({
+      id: comment.id,
+      body: comment.body,
+      user: {
+        login: comment.author.login,
+      },
+      createdAt: comment.createdAt,
+    }));
   } catch (error) {
     console.error(
-      "Ошибка при получении комментариев:",
+      "Ошибка при получении комментариев с использованием GraphQL:",
       error.response?.data || error.message
     );
     throw new Error(

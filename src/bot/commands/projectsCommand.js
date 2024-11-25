@@ -41,6 +41,10 @@ export async function projectsCommand(ctx) {
 }
 
 // Обработка inline-запросов (выбор репозитория, проекта и задачи)
+// Обработка проекта (получение задач)
+// Обработка проекта (получение задач)
+// Обработка проекта (получение задач)
+// Обработка проекта (получение задач)
 export async function handleInlineQuery(ctx) {
   const action = ctx.callbackQuery.data;
 
@@ -109,13 +113,49 @@ export async function handleInlineQuery(ctx) {
       }
 
       const tasks = await getTasks(userToken, projectId);
+      console.log("Полученные задачи:", tasks);
 
       if (!tasks.length) {
         return ctx.reply("В этом проекте нет задач.");
       }
 
-      const keyboard = new InlineKeyboard();
+      // Логируем все задачи перед фильтрацией
       tasks.forEach((task) => {
+        console.log(
+          "Задача перед фильтрацией:",
+          task.title,
+          task.content?.assignees
+        );
+      });
+
+      // Получаем подробности по каждой задаче (включая назначенных пользователей)
+      const tasksWithDetails = await Promise.all(
+        tasks.map(async (task) => {
+          const taskDetails = await getTaskDetails(userToken, task.id);
+          return { ...task, details: taskDetails }; // Добавляем подробности задачи
+        })
+      );
+      console.log(tasksWithDetails);
+
+      // Фильтруем задачи по назначенному пользователю
+      const assignedTasks = tasksWithDetails.filter((task) => {
+        // Проверяем, если задача имеет назначенного пользователя (строку с именем)
+        const assignee = task.details?.assignee; // Это строка, а не объект
+        return assignee === user.github_username; // Сравниваем с логином пользователя
+      });
+
+      // Логируем задачи после фильтрации
+      console.log(
+        "Задачи после фильтрации по назначенному пользователю:",
+        assignedTasks
+      );
+
+      if (assignedTasks.length === 0) {
+        return ctx.reply("Вы не назначены на задачи в этом проекте.");
+      }
+
+      const keyboard = new InlineKeyboard();
+      assignedTasks.forEach((task) => {
         const taskText = task.title || "Без названия"; // Используем резервное название
         keyboard.text(taskText, `task_${task.id}`).row();
       });
@@ -126,6 +166,7 @@ export async function handleInlineQuery(ctx) {
     // Обработка задачи (показ всей информации о задаче)
     if (action.startsWith("task_")) {
       const taskId = action.split("_").slice(1).join("_"); // Получаем правильный taskId
+      console.log("Полученный taskId:", taskId);
 
       const task = await getTaskDetails(userToken, taskId);
 
@@ -138,16 +179,28 @@ export async function handleInlineQuery(ctx) {
       }
 
       const taskDetails = `
-            **Задача:** ${escapeMarkdown(task.title)}
-            **Описание:** ${escapeMarkdown(task.body || "Нет описания")}
-            **Ссылка:** [Открыть задачу](${escapeMarkdown(task.url)})
-            **Создана:** ${escapeMarkdown(task.createdAt)}
-            **Обновлена:** ${escapeMarkdown(task.updatedAt)}
-            **Ответственный:** ${escapeMarkdown(task.assignee || "Не назначен")}
-          `;
+          **Задача:** ${escapeMarkdown(task.title)}
+          **Описание:** ${escapeMarkdown(task.body || "Нет описания")}
+          **Ссылка:** [Открыть задачу](${escapeMarkdown(task.url)})
+          **Создана:** ${escapeMarkdown(task.createdAt)}
+          **Обновлена:** ${escapeMarkdown(task.updatedAt)}
+          **Ответственный:** ${escapeMarkdown(
+            task.assignee?.login || "Не назначен"
+          )}
+        `;
+
+      // Кнопка для комментариев
+      console.log("АЙди задачи:", taskId);
+      const keyboard = new InlineKeyboard().text(
+        "Показать комментарии",
+        `show_comments_${taskId}`
+      );
 
       await ctx.answerCallbackQuery();
-      return ctx.reply(taskDetails, { parse_mode: "MarkdownV2" });
+      return ctx.reply(taskDetails, {
+        parse_mode: "MarkdownV2",
+        reply_markup: keyboard,
+      });
     }
   } catch (error) {
     console.error(

@@ -9,6 +9,7 @@ import { cancelAuth } from "./cancelAuth.js";
 import { retryAuth } from "./retryAuth.js";
 import { helpCommand, addCommandDescription } from "./helpCommand.js";
 import { projectsCommand, handleInlineQuery } from "./projectsCommand.js";
+import { showTaskComments } from "./commentsCommand.js";
 
 export async function registerCommands(
   bot,
@@ -36,7 +37,6 @@ export async function registerCommands(
   // Обработчик inline-запросов
   bot.on("callback_query:data", async (ctx) => {
     const action = ctx.callbackQuery.data;
-
     if (action.startsWith("repo_")) {
       console.log("Нажата кнопка репозитория:", action);
       await handleInlineQuery(ctx);
@@ -46,6 +46,9 @@ export async function registerCommands(
     } else if (action.startsWith("task_")) {
       console.log("Нажата кнопка задачи:", action);
       await handleInlineQuery(ctx); // Обработать задачу
+    } else if (action.startsWith("show_comments_")) {
+      console.log("Нажата кнопка комментариев:", action);
+      await showTaskComments(ctx); // Вызов функции для комментариев
     }
 
     await ctx.answerCallbackQuery(); // Убираем индикатор загрузки
