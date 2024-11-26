@@ -42,9 +42,6 @@ export async function projectsCommand(ctx) {
 
 // Обработка inline-запросов (выбор репозитория, проекта и задачи)
 // Обработка проекта (получение задач)
-// Обработка проекта (получение задач)
-// Обработка проекта (получение задач)
-// Обработка проекта (получение задач)
 export async function handleInlineQuery(ctx) {
   const action = ctx.callbackQuery.data;
 
@@ -139,9 +136,16 @@ export async function handleInlineQuery(ctx) {
 
       // Фильтруем задачи по назначенному пользователю
       const assignedTasks = tasksWithDetails.filter((task) => {
-        // Проверяем, если задача имеет назначенного пользователя (строку с именем)
-        const assignee = task.details?.assignee; // Это строка, а не объект
-        return assignee === user.github_username; // Сравниваем с логином пользователя
+        const assigneesString = task.details?.assignee; // Получаем строку исполнителей
+        if (!assigneesString) return false; // Если исполнители отсутствуют, задача исключается
+
+        // Преобразуем строку в массив логинов
+        const assignees = assigneesString
+          .split(",")
+          .map((assignee) => assignee.trim());
+
+        // Проверяем, есть ли текущий пользователь среди исполнителей
+        return assignees.includes(user.github_username);
       });
 
       // Логируем задачи после фильтрации
@@ -179,15 +183,17 @@ export async function handleInlineQuery(ctx) {
       }
 
       const taskDetails = `
-          **Задача:** ${escapeMarkdown(task.title)}
-          **Описание:** ${escapeMarkdown(task.body || "Нет описания")}
-          **Ссылка:** [Открыть задачу](${escapeMarkdown(task.url)})
-          **Создана:** ${escapeMarkdown(task.createdAt)}
-          **Обновлена:** ${escapeMarkdown(task.updatedAt)}
-          **Ответственный:** ${escapeMarkdown(
-            task.assignee?.login || "Не назначен"
-          )}
-        `;
+📋 *Задача*: ${escapeMarkdown(task.title)}
+
+📝 *Описание*: ${escapeMarkdown(task.body || "Нет описания")}
+
+🔗 *Ссылка*: [Открыть задачу](${task.url})
+
+🕒 *Создана*: ${escapeMarkdown(new Date(task.createdAt).toLocaleString())}
+🔄 *Обновлена*: ${escapeMarkdown(new Date(task.updatedAt).toLocaleString())}
+
+👤 *Ответственный*: ${escapeMarkdown(task.assignee || "Не назначен")}
+`;
 
       // Кнопка для комментариев
       console.log("АЙди задачи:", taskId);

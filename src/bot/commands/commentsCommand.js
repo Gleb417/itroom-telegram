@@ -43,12 +43,10 @@ export async function showTaskComments(ctx) {
 
       for (const comment of comments) {
         const commentText = `
-              **Автор:** ${escapeMarkdownV2(comment.user.login)}
-              **Дата:** ${escapeMarkdownV2(
-                new Date(comment.createdAt).toLocaleString()
-              )}
-              **Комментарий:** ${escapeMarkdownV2(comment.body)}
-            `;
+🖊 **Автор:** ${escapeMarkdownV2(comment.user.login)}
+📅 **Дата:** ${escapeMarkdownV2(new Date(comment.createdAt).toLocaleString())}
+💬 **Комментарий:**\n${escapeMarkdownV2(comment.body)}
+`;
 
         // Если текущий блок слишком длинный, отправляем его и начинаем новый
         if (currentChunk.length + commentText.length > chunkSize) {
