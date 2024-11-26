@@ -34,7 +34,7 @@ export async function showTaskComments(ctx) {
     if (!userToken) return; // Если токен не получен, выходим
     const comments = await getComments(userToken, taskId); // Функция для получения комментариев
 
-    let commentsText = "Комментариев нет."; // Сообщение, если комментариев нет
+    let commentsText = escapeMarkdownV2("Комментариев нет."); // Сообщение, если комментариев нет
 
     if (comments && comments.length > 0) {
       commentsText = "";
@@ -69,6 +69,9 @@ export async function showTaskComments(ctx) {
     await ctx.answerCallbackQuery(); // Подтверждаем действие
   } catch (error) {
     console.error("Ошибка при получении комментариев:", error);
-    await ctx.reply(`Не удалось загрузить комментарии: ${error.message}`);
+    await ctx.reply(
+      escapeMarkdownV2(`Не удалось загрузить комментарии: ${error.message}`), // Экранируем сообщение об ошибке
+      { parse_mode: "MarkdownV2" }
+    );
   }
 }
