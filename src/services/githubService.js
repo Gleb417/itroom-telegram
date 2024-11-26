@@ -2,43 +2,66 @@ import axios from "axios";
 
 async function getTasks(userToken, projectId) {
   const query = `
-	  query ($projectId: ID!) {
-		node(id: $projectId) {
-		  ... on ProjectV2 {
-			items(first: 50) {  # Увеличь значение, если нужно больше задач
-			  nodes {
-				id
-				title: fieldValueByName(name: "Title") {
-				  ... on ProjectV2ItemFieldSingleSelectValue {
-					name
-				  }
-				}
-				content {
-				  ... on Issue {
-					id
-					title
-					url
-					createdAt
-				  }
-				  ... on PullRequest {
-					id
-					title
-					url
-					createdAt
-				  }
-				}
-			  }
-			}
-		  }
-		}
-	  }
-	`;
+    query ($projectId: ID!) {
+      node(id: $projectId) {
+        ... on ProjectV2 {
+          items(first: 50) {
+            nodes {
+              id
+              content {
+                ... on Issue {
+                  title
+                  url
+                  createdAt
+                }
+                ... on PullRequest {
+                  title
+                  url
+                  createdAt
+                }
+              }
+              fieldValues(first: 50) {
+                nodes {
+                  ... on ProjectV2ItemFieldValueCommon {
+                    field {
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        name
+                      }
+                      ... on ProjectV2Field {
+                        id
+                        name
+                      }
+                    }
+                  }
+                  ... on ProjectV2ItemFieldSingleSelectValue {
+                    name
+                  }
+                  ... on ProjectV2ItemFieldTextValue {
+                    text
+                  }
+                  ... on ProjectV2ItemFieldDateValue {
+                    date
+                  }
+                  ... on ProjectV2ItemFieldNumberValue {
+                    number
+                  }
+                  ... on ProjectV2ItemFieldIterationValue {
+                    title
+                    duration
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
 
   const variables = { projectId };
 
   try {
-    console.log("GraphQL variables for getTasks:", variables);
-
     const response = await axios.post(
       "https://api.github.com/graphql",
       { query, variables },
@@ -62,18 +85,109 @@ async function getTasks(userToken, projectId) {
       return [];
     }
 
-    return items.map((item) => ({
-      id: item.id,
-      title: item.title?.name || item.content?.title || "Без названия",
-      url: item.content?.url || null,
-      createdAt: item.content?.createdAt || null,
-    }));
+    return items.map((item) => {
+      const fields = {};
+      item.fieldValues.nodes.forEach((fieldValue) => {
+        if (fieldValue.field?.name) {
+          fields[fieldValue.field.name] =
+            fieldValue.text ||
+            fieldValue.name ||
+            fieldValue.date ||
+            fieldValue.number ||
+            fieldValue.title || // Для Iteration Value
+            null;
+        }
+      });
+
+      return {
+        id: item.id,
+        title: item.content?.title || "Без названия",
+        url: item.content?.url || null,
+        createdAt: item.content?.createdAt || null,
+        fields,
+      };
+    });
   } catch (error) {
     console.error(
       "Ошибка при получении задач Projects V2:",
       error.response?.data || error.message
     );
     throw new Error("Не удалось получить задачи. Проверьте данные проекта.");
+  }
+}
+
+async function getProjectFields(userToken, projectId) {
+  const query = `
+    query ($projectId: ID!) {
+      node(id: $projectId) {
+        ... on ProjectV2 {
+          fields(first: 50) {
+            nodes {
+              ... on ProjectV2SingleSelectField {
+                id
+                name
+                options {
+                  name
+                }
+              }
+              ... on ProjectV2Field {
+                id
+                name
+                dataType
+              }
+              ... on ProjectV2Field {
+                id
+                name
+              }
+              ... on ProjectV2Field {
+                id
+                name
+              }
+              ... on ProjectV2IterationField {
+                id
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const variables = { projectId };
+
+  try {
+    const response = await axios.post(
+      "https://api.github.com/graphql",
+      { query, variables },
+      {
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.data.errors) {
+      console.error("GraphQL ошибки:", response.data.errors);
+      throw new Error("Ошибка GraphQL: " + response.data.errors[0]?.message);
+    }
+
+    const fields = response.data?.data?.node?.fields?.nodes;
+
+    if (!fields) {
+      console.error("Поля проекта не найдены или данные некорректны.");
+      return [];
+    }
+    console.log(fields);
+
+    return fields;
+  } catch (error) {
+    console.error(
+      "Ошибка при получении полей проекта:",
+      error.response?.data || error.message
+    );
+    throw new Error("Не удалось получить поля проекта.");
   }
 }
 
@@ -225,37 +339,69 @@ function deepLog(obj) {
 }
 
 async function getTaskDetails(userToken, taskId) {
+  const query = `
+    query ($taskId: ID!) {
+      node(id: $taskId) {
+        ... on ProjectV2Item {
+          id
+          content {
+            ... on Issue {
+              title
+              body
+              url
+              createdAt
+              updatedAt
+              assignees(first: 10) {
+                nodes {
+                  login
+                }
+              }
+            }
+            ... on DraftIssue {
+              title
+              body
+            }
+          }
+          fieldValues(first: 50) {
+            nodes {
+              ... on ProjectV2ItemFieldValueCommon {
+                field {
+                  ... on ProjectV2SingleSelectField {
+                    id
+                    name
+                  }
+                  ... on ProjectV2Field {
+                    id
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+              }
+              ... on ProjectV2ItemFieldTextValue {
+                text
+              }
+              ... on ProjectV2ItemFieldDateValue {
+                date
+              }
+              ... on ProjectV2ItemFieldNumberValue {
+                number
+              }
+              ... on ProjectV2ItemFieldIterationValue {
+                title
+                duration
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const variables = { taskId };
+
   try {
-    const query = `
-		query ($taskId: ID!) {
-		  node(id: $taskId) {
-			... on ProjectV2Item {
-			  id
-			  content {
-				... on Issue {
-				  title
-				  body
-				  url
-				  createdAt
-				  updatedAt
-				  assignees(first: 10) {
-					nodes {
-					  login
-					}
-				  }
-				}
-				... on DraftIssue {
-				  title
-				  body
-				}
-			  }
-			}
-		  }
-		}
-	  `;
-
-    const variables = { taskId };
-
     const response = await axios.post(
       "https://api.github.com/graphql",
       { query, variables },
@@ -267,34 +413,54 @@ async function getTaskDetails(userToken, taskId) {
       }
     );
 
-    // Логируем весь ответ
+    if (response.data.errors) {
+      console.error("GraphQL ошибки:", response.data.errors);
+      throw new Error("Ошибка GraphQL: " + response.data.errors[0]?.message);
+    }
 
-    const taskData = response.data.data.node.content;
+    const taskData = response.data?.data?.node;
 
     if (!taskData) {
       console.error("Задача не найдена. taskId:", taskId);
       throw new Error("Задача не найдена.");
     }
 
-    // Обработка assignees
+    const fields = taskData.fieldValues.nodes.map((fieldValue) => {
+      const fieldName = fieldValue?.field?.name || "Unknown";
+      let value;
+
+      if (fieldValue.name) value = fieldValue.name; // SingleSelect
+      else if (fieldValue.text) value = fieldValue.text; // Text field
+      else if (fieldValue.date) value = fieldValue.date; // Date field
+      else if (fieldValue.number) value = fieldValue.number; // Number field
+      else if (fieldValue.title) value = fieldValue.title; // Iteration field
+      else value = null;
+
+      return { fieldName, value };
+    });
+
     const assignees =
-      taskData.assignees?.nodes?.map((assignee) => assignee.login).join(", ") ||
-      "Не назначен";
+      taskData.content?.assignees?.nodes
+        ?.map((assignee) => assignee.login)
+        .join(", ") || "Не назначен";
 
     const taskDetails = {
       id: taskData.id,
-      title: taskData.title || "Без названия",
-      body: taskData.body || "Нет описания",
-      url: taskData.url,
-      createdAt: taskData.createdAt,
-      updatedAt: taskData.updatedAt,
-      assignee: assignees,
+      title: taskData.content?.title || "Без названия",
+      body: taskData.content?.body || "Нет описания",
+      url: taskData.content?.url || null,
+      createdAt: taskData.content?.createdAt || null,
+      updatedAt: taskData.content?.updatedAt || null,
+      assignees,
+      fields,
     };
 
     return taskDetails;
   } catch (error) {
-    console.error("Ошибка при получении данных о задаче:");
-    console.error(error.response?.data || error.message);
+    console.error(
+      "Ошибка при получении данных о задаче:",
+      error.response?.data || error.message
+    );
     throw new Error("Не удалось получить данные о задаче.");
   }
 }
@@ -305,4 +471,5 @@ export {
   getComments,
   getProjectsV2,
   getTaskDetails,
+  getProjectFields,
 };

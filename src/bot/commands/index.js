@@ -37,18 +37,29 @@ export async function registerCommands(
   // Обработчик inline-запросов
   bot.on("callback_query:data", async (ctx) => {
     const action = ctx.callbackQuery.data;
+    console.log("Нажата кнопка:", action); // Логируем полученное действие
+
     if (action.startsWith("repo_")) {
       console.log("Нажата кнопка репозитория:", action);
-      await handleInlineQuery(ctx);
+      await handleInlineQuery(ctx); // Обрабатываем запрос для репозитория
     } else if (action.startsWith("project_")) {
       console.log("Нажата кнопка проекта:", action);
-      await handleInlineQuery(ctx);
+      await handleInlineQuery(ctx); // Обрабатываем запрос для проекта
     } else if (action.startsWith("task_")) {
       console.log("Нажата кнопка задачи:", action);
-      await handleInlineQuery(ctx); // Обработать задачу
+      await handleInlineQuery(ctx); // Обрабатываем запрос для задачи
     } else if (action.startsWith("show_comments_")) {
       console.log("Нажата кнопка комментариев:", action);
       await showTaskComments(ctx); // Вызов функции для комментариев
+    } else if (action.startsWith("deadline_")) {
+      console.log("Нажато поле дедлайна:", action);
+      await handleInlineQuery(ctx); // Обрабатываем запрос для выбора поля дедлайна
+    } else if (action === "cancel_auth") {
+      cancelAuth(ctx, authState); // Обработка отмены авторизации
+    } else if (action === "retry_auth") {
+      retryAuth(ctx); // Обработка повторной попытки авторизации
+    } else if (action === "change_token") {
+      await changeTokenCallback(ctx); // Обработка изменения токена
     }
 
     await ctx.answerCallbackQuery(); // Убираем индикатор загрузки
@@ -85,21 +96,6 @@ export async function registerCommands(
     } else {
       tokenHandler(ctx, chatTokens, authState);
     }
-  });
-
-  // Обработка inline-кнопок
-  bot.on("callback_query:data", async (ctx) => {
-    const action = ctx.callbackQuery.data;
-
-    if (action === "cancel_auth") {
-      cancelAuth(ctx, authState);
-    } else if (action === "retry_auth") {
-      retryAuth(ctx);
-    } else if (action === "change_token") {
-      await changeTokenCallback(ctx); // Обрабатываем изменение токена
-    }
-
-    await ctx.answerCallbackQuery(); // Убираем индикатор загрузки на кнопке
   });
 
   // Инициализация состояния пользователя

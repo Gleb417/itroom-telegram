@@ -4,6 +4,7 @@ import {
   getProjectsV2,
   getTasks,
   getTaskDetails,
+  getProjectFields,
 } from "../../services/githubService.js";
 import db from "../../db/models/index.js";
 
@@ -116,30 +117,81 @@ export async function handleInlineQuery(ctx) {
         return ctx.reply("В этом проекте нет задач.");
       }
 
-      // Логируем все задачи перед фильтрацией
-      tasks.forEach((task) => {
-        console.log(
-          "Задача перед фильтрацией:",
-          task.title,
-          task.content?.assignees
-        );
+      // Получаем поля проекта
+      const projectFields = await getProjectFields(userToken, projectId);
+
+      // Фильтруем поля, чтобы оставить только те, у которых dataType === 'DATE'
+      const dateFields = projectFields.filter(
+        (field) => field.dataType === "DATE"
+      );
+
+      const keyboard = new InlineKeyboard();
+
+      // Формируем кнопки для каждого поля с типом DATE
+      dateFields.forEach((field) => {
+        if (field.id && field.name) {
+          const buttonData = `deadline_${field.id}_${projectId}`;
+          // Убедитесь, что buttonData не содержит нежелательных символов или пробелов
+          if (buttonData && buttonData.length < 64) {
+            // Telegram API ограничивает длину строки
+            keyboard.text(field.name, buttonData).row();
+          } else {
+            console.error("Некорректные данные для кнопки:", buttonData);
+          }
+        } else {
+          console.error("Поле не содержит id или name:", field);
+        }
       });
 
-      // Получаем подробности по каждой задаче (включая назначенных пользователей)
+      // Отправляем клавиатуру с кнопками
+      await ctx.answerCallbackQuery();
+      return ctx.reply("Выберите поле для сортировки по дедлайну:", {
+        reply_markup: keyboard,
+      });
+    }
+
+    // Обработка выбора поля для дедлайна
+    if (action.startsWith("deadline_")) {
+      const actionWithoutPrefix = action.slice(9); // Получаем строку без "deadline_"
+
+      // Разделяем строку по символу "_"
+      const actionParts = actionWithoutPrefix.split("_");
+
+      // fieldId - это все части до последних двух
+      const fieldId = actionParts.slice(0, actionParts.length - 2).join("_");
+
+      // projectId - это последние две части
+      const projectId = actionParts.slice(actionParts.length - 2).join("_");
+
+      console.log("Полный полученный айди:", action);
+      console.log("Айди поля:", fieldId); // Например, PVTF_lADOC06YzM4AtG5Yzgj7GLI
+      console.log("Айди проекта:", projectId); // Например, PVT_kwDOC06YzM4AtG5Y
+
+      // Получаем задачи и сортируем по выбранному полю
+      const tasks = await getTasks(userToken, projectId);
+      const projectFields = await getProjectFields(userToken, projectId);
+
+      // Находим выбранное поле
+      const deadlineField = projectFields.find((field) => field.id === fieldId);
+
+      if (!deadlineField) {
+        return ctx.reply("Не удалось найти выбранное поле.");
+      }
+
+      // Фильтрация задач по назначенному пользователю
       const tasksWithDetails = await Promise.all(
         tasks.map(async (task) => {
           const taskDetails = await getTaskDetails(userToken, task.id);
           return { ...task, details: taskDetails }; // Добавляем подробности задачи
         })
       );
-      console.log(tasksWithDetails);
 
       // Фильтруем задачи по назначенному пользователю
       const assignedTasks = tasksWithDetails.filter((task) => {
-        const assigneesString = task.details?.assignee; // Получаем строку исполнителей
-        if (!assigneesString) return false; // Если исполнители отсутствуют, задача исключается
+        const assigneesString = task.details?.assignees;
+        if (!assigneesString) return false; // Если исполнители отсутствуют, исключаем задачу
 
-        // Преобразуем строку в массив логинов
+        // Преобразуем строку исполнителей в массив логинов
         const assignees = assigneesString
           .split(",")
           .map((assignee) => assignee.trim());
@@ -148,23 +200,37 @@ export async function handleInlineQuery(ctx) {
         return assignees.includes(user.github_username);
       });
 
-      // Логируем задачи после фильтрации
-      console.log(
-        "Задачи после фильтрации по назначенному пользователю:",
-        assignedTasks
-      );
-
       if (assignedTasks.length === 0) {
         return ctx.reply("Вы не назначены на задачи в этом проекте.");
       }
 
-      const keyboard = new InlineKeyboard();
-      assignedTasks.forEach((task) => {
-        const taskText = task.title || "Без названия"; // Используем резервное название
-        keyboard.text(taskText, `task_${task.id}`).row();
+      // Сортируем задачи по дедлайну
+      const sortedTasks = assignedTasks.sort((a, b) => {
+        const deadlineA = a.fields[deadlineField.name];
+        const deadlineB = b.fields[deadlineField.name];
+
+        if (!deadlineA || !deadlineB) return 0;
+
+        return new Date(deadlineA) - new Date(deadlineB);
       });
 
-      return ctx.reply("Выберите задачу:", { reply_markup: keyboard });
+      // Показываем отсортированные задачи с дедлайнами
+      const keyboard = new InlineKeyboard();
+      sortedTasks.forEach((task) => {
+        const taskText = task.title || "Без названия"; // Используем резервное название
+        const deadline = task.fields[deadlineField.name]; // Получаем дедлайн из задачи
+
+        // Если есть дедлайн, добавляем его в текст задачи
+        const taskDisplayText = deadline
+          ? `${taskText} (Дедлайн: ${new Date(deadline).toLocaleDateString()})`
+          : taskText;
+
+        keyboard.text(taskDisplayText, `task_${task.id}`).row();
+      });
+
+      await ctx.reply("Задачи отсортированы по дедлайну:", {
+        reply_markup: keyboard,
+      });
     }
 
     // Обработка задачи (показ всей информации о задаче)
@@ -174,7 +240,6 @@ export async function handleInlineQuery(ctx) {
 
       const task = await getTaskDetails(userToken, taskId);
 
-      // Проверяем, если задача не найдена или в ответе нет нужных данных
       if (!task) {
         await ctx.answerCallbackQuery();
         return ctx.reply(
@@ -192,11 +257,9 @@ export async function handleInlineQuery(ctx) {
 🕒 *Создана*: ${escapeMarkdown(new Date(task.createdAt).toLocaleString())}
 🔄 *Обновлена*: ${escapeMarkdown(new Date(task.updatedAt).toLocaleString())}
 
-👤 *Ответственный*: ${escapeMarkdown(task.assignee || "Не назначен")}
-`;
+👤 *Ответственный*: ${escapeMarkdown(task.assignee || "Не назначен")}`;
 
       // Кнопка для комментариев
-      console.log("АЙди задачи:", taskId);
       const keyboard = new InlineKeyboard().text(
         "Показать комментарии",
         `show_comments_${taskId}`
@@ -209,10 +272,7 @@ export async function handleInlineQuery(ctx) {
       });
     }
   } catch (error) {
-    console.error(
-      "Ошибка в handleInlineQuery:",
-      error.response?.data || error.message
-    );
+    console.error("Ошибка в handleInlineQuery:", error);
     await ctx.answerCallbackQuery();
     ctx.reply("Произошла ошибка. Попробуйте позже.");
   }
