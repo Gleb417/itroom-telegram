@@ -54,6 +54,9 @@ export async function registerCommands(
     } else if (action.startsWith("deadline_")) {
       console.log("Нажато поле дедлайна:", action);
       await handleInlineQuery(ctx); // Обрабатываем запрос для выбора поля дедлайна
+    } else if (action.startsWith("skip_")) {
+      console.log("Нажата кнопка Пропустить", action);
+      await handleInlineQuery(ctx); // Обработка кнопки "Пропустить"
     } else if (action === "cancel_auth") {
       cancelAuth(ctx, authState); // Обработка отмены авторизации
     } else if (action === "retry_auth") {

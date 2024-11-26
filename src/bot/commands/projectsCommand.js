@@ -127,22 +127,26 @@ export async function handleInlineQuery(ctx) {
 
       const keyboard = new InlineKeyboard();
 
-      // Формируем кнопки для каждого поля с типом DATE
-      dateFields.forEach((field) => {
-        if (field.id && field.name) {
-          const buttonData = `deadline_${field.id}_${projectId}`;
-          // Убедитесь, что buttonData не содержит нежелательных символов или пробелов
-          if (buttonData && buttonData.length < 64) {
-            // Telegram API ограничивает длину строки
-            keyboard.text(field.name, buttonData).row();
+      if (dateFields.length > 0) {
+        // Формируем кнопки для каждого поля с типом DATE
+        dateFields.forEach((field) => {
+          if (field.id && field.name) {
+            const buttonData = `deadline_${field.id}_${projectId}`;
+            // Убедитесь, что buttonData не содержит нежелательных символов или пробелов
+            if (buttonData && buttonData.length < 64) {
+              // Telegram API ограничивает длину строки
+              keyboard.text(field.name, buttonData).row();
+            } else {
+              console.error("Некорректные данные для кнопки:", buttonData);
+            }
           } else {
-            console.error("Некорректные данные для кнопки:", buttonData);
+            console.error("Поле не содержит id или name:", field);
           }
-        } else {
-          console.error("Поле не содержит id или name:", field);
-        }
-      });
+        });
+      }
 
+      // Добавляем кнопку "Пропустить" в любом случае
+      keyboard.text("Пропустить", `skip_${projectId}`).row();
       // Отправляем клавиатуру с кнопками
       await ctx.answerCallbackQuery();
       return ctx.reply("Выберите поле для сортировки по дедлайну:", {
@@ -150,7 +154,7 @@ export async function handleInlineQuery(ctx) {
       });
     }
 
-    // Обработка выбора поля для дедлайна
+    // Обработка выбора поля для дедлайна или кнопки "Пропустить"
     if (action.startsWith("deadline_")) {
       const actionWithoutPrefix = action.slice(9); // Получаем строку без "deadline_"
 
@@ -229,6 +233,53 @@ export async function handleInlineQuery(ctx) {
       });
 
       await ctx.reply("Задачи отсортированы по дедлайну:", {
+        reply_markup: keyboard,
+      });
+    }
+
+    // Обработка кнопки "Пропустить"
+    if (action.startsWith("skip_")) {
+      // Извлекаем projectId из строки callback
+      const actionWithoutPrefix = action.slice(5); // Убираем префикс "skip_"
+      const projectId = actionWithoutPrefix; // В данном случае, это будет projectId
+
+      console.log("Нажата кнопка Пропустить для проекта:", projectId);
+
+      // Получаем задачи по projectId
+      const tasks = await getTasks(userToken, projectId);
+      const tasksWithDetails = await Promise.all(
+        tasks.map(async (task) => {
+          const taskDetails = await getTaskDetails(userToken, task.id);
+          return { ...task, details: taskDetails }; // Добавляем подробности задачи
+        })
+      );
+
+      // Фильтруем задачи по назначенному пользователю
+      const assignedTasks = tasksWithDetails.filter((task) => {
+        const assigneesString = task.details?.assignees;
+        if (!assigneesString) return false; // Если исполнители отсутствуют, исключаем задачу
+
+        // Преобразуем строку исполнителей в массив логинов
+        const assignees = assigneesString
+          .split(",")
+          .map((assignee) => assignee.trim());
+
+        // Проверяем, есть ли текущий пользователь среди исполнителей
+        return assignees.includes(user.github_username);
+      });
+
+      if (assignedTasks.length === 0) {
+        return ctx.reply("Вы не назначены на задачи в этом проекте.");
+      }
+
+      // Показываем все задачи без сортировки
+      const keyboard = new InlineKeyboard();
+      assignedTasks.forEach((task) => {
+        const taskText = task.title || "Без названия"; // Используем резервное название
+        keyboard.text(taskText, `task_${task.id}`).row();
+      });
+
+      await ctx.reply("Задачи без сортировки:", {
         reply_markup: keyboard,
       });
     }
