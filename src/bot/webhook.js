@@ -4,6 +4,9 @@ import { notify } from './notifications/index.js'
 const app = express()
 const PORT = 3001
 
+// Массив для хранения данных о событиях
+let webhookData = []
+
 // Middleware для обработки JSON
 app.use(express.json())
 
@@ -13,6 +16,9 @@ app.post('/webhook', async (req, res) => {
 	const payload = req.body
 
 	console.log(`Получено событие: ${event}`)
+
+	// Сохраняем полученные данные в массив
+	webhookData.push({ event, payload, timestamp: new Date() })
 
 	try {
 		// Передаем данные в обработчик уведомлений
@@ -24,6 +30,12 @@ app.post('/webhook', async (req, res) => {
 		console.error('Ошибка обработки вебхука:', error)
 		res.status(500).send('Ошибка сервера.')
 	}
+})
+
+// Endpoint для просмотра данных о событиях (GET)
+app.get('/webhook-data', (req, res) => {
+	// Возвращаем последние данные о событиях
+	res.status(200).json(webhookData)
 })
 
 // Запуск сервера
