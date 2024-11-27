@@ -55,7 +55,7 @@ app.post('/webhook', async (req, res) => {
  * Endpoint для просмотра сохраненных данных о событиях Webhook.
  * Полезно для отладки и мониторинга полученных событий.
  */
-app.get('/webhook-data', (req, res) => {
+app.get('/webhook', (req, res) => {
 	// Возвращаем массив webhookData в формате JSON
 	res.status(200).json(webhookData)
 })

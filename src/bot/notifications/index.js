@@ -42,7 +42,7 @@ export const eventHandlers = {
 				payload.comment,
 				payload.issue
 			)
-			return notification.message || null // Извлекаем текстовое сообщение из объекта
+			return notification.message
 		}
 		return null
 	},
