@@ -1,44 +1,57 @@
-import express from 'express'
-import { notify } from './notifications/index.js'
-
+// Импорт необходимых модулей
+import express from 'express' // Для создания сервера
+import { notify } from './notifications/index.js' // Функция уведомлений для обработки событий
 const app = express()
 const PORT = 3001
-
-// Массив для хранения данных о событиях
+// Массив для хранения данных о полученных событиях Webhook
 let webhookData = []
-
-// Middleware для обработки JSON
+// Middleware для обработки JSON-данных в теле запросов
 app.use(express.json())
-
-// Endpoint для обработки Webhook (POST)
+/**
+ * Endpoint для обработки Webhook событий.
+ * GitHub отправляет POST-запросы с данными о событиях, которые мы обрабатываем.
+ */
 app.post('/webhook', async (req, res) => {
-	const event = req.headers['x-github-event'] // Тип события
+	// Чтение типа события из заголовка запроса
+	const event = req.headers['x-github-event'] // Например, "issues", "push", "projects_v2_item"
+	// Получение полезной нагрузки (payload) из тела запроса
 	const payload = req.body
 
+	// Логирование события в консоль
 	console.log(`Получено событие: ${event}`)
 
-	// Сохраняем полученные данные в массив
-	webhookData.push({ event, payload, timestamp: new Date() })
+	// Сохраняем данные о событии в массив webhookData
+	webhookData.push({
+		event,
+		payload,
+		timestamp: new Date(), // Сохраняем время получения события
+	})
 
 	try {
-		// Передаем данные в обработчик уведомлений
+		// Передаем событие и его данные в обработчик уведомлений
 		await notify(event, payload)
 
-		// Ответ GitHub для подтверждения получения
+		// Возвращаем ответ с HTTP-статусом 200, чтобы подтвердить успешную обработку
 		res.status(200).send('Webhook обработан.')
 	} catch (error) {
+		// Логируем ошибку обработки вебхука
 		console.error('Ошибка обработки вебхука:', error)
+
+		// Возвращаем ошибку с HTTP-статусом 500
 		res.status(500).send('Ошибка сервера.')
 	}
 })
 
-// Endpoint для просмотра данных о событиях (GET)
+/**
+ * Endpoint для просмотра сохраненных данных о событиях Webhook.
+ * Полезно для отладки и мониторинга полученных событий.
+ */
 app.get('/webhook-data', (req, res) => {
-	// Возвращаем последние данные о событиях
+	// Возвращаем массив webhookData в формате JSON
 	res.status(200).json(webhookData)
 })
 
-// Запуск сервера
+// Запуск сервера на указанном порту
 app.listen(PORT, () => {
 	console.log(`Сервер запущен на http://localhost:${PORT}`)
 })
