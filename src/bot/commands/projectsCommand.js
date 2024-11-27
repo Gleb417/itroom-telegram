@@ -308,7 +308,7 @@ export async function handleInlineQuery(ctx) {
 🕒 *Создана*: ${escapeMarkdown(new Date(task.createdAt).toLocaleString())}
 🔄 *Обновлена*: ${escapeMarkdown(new Date(task.updatedAt).toLocaleString())}
 
-👤 *Ответственный*: ${escapeMarkdown(task.assignee || "Не назначен")}`;
+👤 *Ответственный*: ${escapeMarkdown(task.assignees || "Не назначен")}`;
 
       // Кнопка для комментариев
       const keyboard = new InlineKeyboard().text(

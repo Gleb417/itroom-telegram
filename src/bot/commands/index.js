@@ -5,8 +5,6 @@ import {
 } from "./authCommand.js";
 import { setUserKeyboard } from "../../utils/keyboard.js";
 import { tokenHandler } from "../middlewares/authMiddleware.js";
-import { cancelAuth } from "./cancelAuth.js";
-import { retryAuth } from "./retryAuth.js";
 import { helpCommand, addCommandDescription } from "./helpCommand.js";
 import { projectsCommand, handleInlineQuery } from "./projectsCommand.js";
 import { showTaskComments } from "./commentsCommand.js";
@@ -34,6 +32,18 @@ export async function registerCommands(
   });
   bot.command("project", projectsCommand);
 
+  bot.command("amogus", async (ctx) => {
+    const gifUrl =
+      "https://media1.tenor.com/m/gQV5VzHLWQIAAAAd/among-us-sus.gif"; // URL вашей гифки
+
+    try {
+      await ctx.replyWithAnimation(gifUrl); // Отправляем гифку как анимацию
+    } catch (error) {
+      console.error("Ошибка отправки гифки:", error);
+      await ctx.reply("Не удалось отправить гифку. Попробуйте позже.");
+    }
+  });
+
   // Обработчик inline-запросов
   bot.on("callback_query:data", async (ctx) => {
     const action = ctx.callbackQuery.data;
@@ -57,10 +67,6 @@ export async function registerCommands(
     } else if (action.startsWith("skip_")) {
       console.log("Нажата кнопка Пропустить", action);
       await handleInlineQuery(ctx); // Обработка кнопки "Пропустить"
-    } else if (action === "cancel_auth") {
-      cancelAuth(ctx, authState); // Обработка отмены авторизации
-    } else if (action === "retry_auth") {
-      retryAuth(ctx); // Обработка повторной попытки авторизации
     } else if (action === "change_token") {
       await changeTokenCallback(ctx); // Обработка изменения токена
     }
@@ -76,14 +82,6 @@ export async function registerCommands(
   addCommandDescription(
     "/help",
     "Вывод списка доступных команд и их описания."
-  );
-  addCommandDescription(
-    "/retry",
-    "Попробовать повторить последний шаг авторизации (если доступно)."
-  );
-  addCommandDescription(
-    "/cancel",
-    "Отменить текущий процесс авторизации или выполнения задачи."
   );
   // Обработка текстовых сообщений (например, токена)
   bot.on("message:text", async (ctx) => {

@@ -1,30 +1,26 @@
 //Здесь храниться команда для вывода всех команд
 // Объект с описанием доступных команд
 const commandsDescription = new Map([
-	[
-		'/auth',
-		'Авторизация через токен. Используйте эту команду, чтобы начать процесс авторизации.',
-	],
-	['/help', 'Вывод списка доступных команд и их описания.'],
-	[
-		'/retry',
-		'Попробовать повторить последний шаг авторизации (если доступно).',
-	],
-	['/cancel', 'Отменить текущий процесс авторизации или выполнения задачи.'],
-])
+  [
+    "/auth",
+    "Авторизация через токен. Используйте эту команду, чтобы начать процесс авторизации.",
+  ],
+  ["/help", "Вывод списка доступных команд и их описания."],
+  ["/amogus", "???"],
+]);
 
 /**
  * Команда /help: отправляет пользователю список доступных команд
  * @param {Context} ctx Контекст команды
  */
 export async function helpCommand(ctx) {
-	let message = '🤖 *Доступные команды бота:*\n\n'
+  let message = "🤖 *Доступные команды бота:*\n\n";
 
-	for (const [command, description] of commandsDescription) {
-		message += `• ${command} — ${description}\n`
-	}
+  for (const [command, description] of commandsDescription) {
+    message += `• ${command} — ${description}\n`;
+  }
 
-	await ctx.reply(message, { parse_mode: 'Markdown' })
+  await ctx.reply(message, { parse_mode: "Markdown" });
 }
 
 /**
@@ -33,7 +29,7 @@ export async function helpCommand(ctx) {
  * @param {string} description Описание команды
  */
 export function addCommandDescription(command, description) {
-	commandsDescription.set(command, description)
+  commandsDescription.set(command, description);
 }
 
 /**
@@ -41,5 +37,5 @@ export function addCommandDescription(command, description) {
  * @param {string} command Имя команды
  */
 export function removeCommandDescription(command) {
-	commandsDescription.delete(command)
+  commandsDescription.delete(command);
 }
