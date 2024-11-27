@@ -3,10 +3,14 @@ import express from 'express' // Для создания сервера
 import { notify } from './notifications/index.js' // Функция уведомлений для обработки событий
 const app = express()
 const PORT = 3001
+
 // Массив для хранения данных о полученных событиях Webhook
 let webhookData = []
+const MAX_EVENTS = 1 // Максимальное количество событий для хранения
+
 // Middleware для обработки JSON-данных в теле запросов
 app.use(express.json())
+
 /**
  * Endpoint для обработки Webhook событий.
  * GitHub отправляет POST-запросы с данными о событиях, которые мы обрабатываем.
@@ -20,12 +24,17 @@ app.post('/webhook', async (req, res) => {
 	// Логирование события в консоль
 	console.log(`Получено событие: ${event}`)
 
-	// Сохраняем данные о событии в массив webhookData
+	// Добавляем новые данные о событии в массив webhookData
 	webhookData.push({
 		event,
 		payload,
 		timestamp: new Date(), // Сохраняем время получения события
 	})
+
+	// Если количество событий превышает MAX_EVENTS, удаляем старые данные
+	if (webhookData.length > MAX_EVENTS) {
+		webhookData.shift() // Удаляем самый старый элемент (первый в массиве)
+	}
 
 	try {
 		// Передаем событие и его данные в обработчик уведомлений
