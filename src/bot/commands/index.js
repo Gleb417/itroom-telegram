@@ -133,6 +133,41 @@ export async function registerCommands(
     }
   });
 
+  // Хранилище стикеров
+  const stickerMemory = new Map();
+
+  // Обработка стикеров
+  bot.on("message", async (ctx) => {
+    // Проверяем, если сообщение содержит стикер
+    if (ctx.message.sticker) {
+      const chatId = ctx.chat.id;
+      const stickerId = ctx.message.sticker.file_id;
+
+      // Если чат ещё не был добавлен, создаём для него новый список стикеров
+      if (!stickerMemory.has(chatId)) {
+        stickerMemory.set(chatId, []);
+      }
+
+      // Добавляем стикер в память
+      stickerMemory.get(chatId).push(stickerId);
+
+      // Отправляем случайный стикер
+      const stickers = stickerMemory.get(chatId);
+      const randomSticker =
+        stickers[Math.floor(Math.random() * stickers.length)];
+
+      // Отправляем случайный стикер из памяти
+      await ctx.replyWithSticker(randomSticker);
+    }
+  });
+
+  // Также, можно добавить команду для очистки памяти стикеров, если нужно
+  bot.command("clear_stickers", (ctx) => {
+    const chatId = ctx.chat.id;
+    stickerMemory.delete(chatId);
+    ctx.reply("Память стикеров была очищена.");
+  });
+
   // Инициализация состояния пользователя
   bot.on("message", async (ctx) => {
     if (!userStates.has(ctx.chat.id)) {
