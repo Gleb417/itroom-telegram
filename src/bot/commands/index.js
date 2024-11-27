@@ -26,7 +26,7 @@ export async function registerCommands(
       );
     }
 
-    await authCommand(ctx); // Вызываем логику авторизации
+    await authCommand(ctx, chatTokens, authState); // Вызываем логику авторизации
     userStates.set(ctx.chat.id, "free"); // Устанавливаем состояние пользователя как свободное
     await setUserKeyboard(ctx, "free");
   });
@@ -119,7 +119,7 @@ export async function registerCommands(
     } else {
       // Если пользователь не авторизован
       if (text === "Авторизация") {
-        await authCommand(ctx); // Запускаем процесс авторизации
+        await authCommand(ctx, chatTokens, authState); // Запускаем процесс авторизации
       } else if (text === "Помощь") {
         await helpCommand(ctx); // Обработка команды помощи
       } else if (text === "Проекты") {
