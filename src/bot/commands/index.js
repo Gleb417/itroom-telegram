@@ -6,7 +6,12 @@ import {
 import { setUserKeyboard } from "../../utils/keyboard.js";
 import { tokenHandler } from "../middlewares/authMiddleware.js";
 import { helpCommand, addCommandDescription } from "./helpCommand.js";
-import { projectsCommand, handleInlineQuery } from "./projectsCommand.js";
+import {
+  projectsCommand,
+  handleInlineQuery,
+  showRepositoryPage,
+  showProjectPage,
+} from "./projectsCommand.js";
 import { showTaskComments } from "./commentsCommand.js";
 
 export async function registerCommands(
@@ -52,6 +57,13 @@ export async function registerCommands(
     if (action.startsWith("repo_")) {
       console.log("Нажата кнопка репозитория:", action);
       await handleInlineQuery(ctx); // Обрабатываем запрос для репозитория
+    } else if (action.startsWith("page_")) {
+      const page = parseInt(action.split("_")[1], 10);
+      console.log("Переход на страницу:", page); // Проверяем, какая страница запрошена
+      await showRepositoryPage(ctx, page);
+    } else if (action.startsWith("project_page_")) {
+      const page = parseInt(action.split("_")[2], 10);
+      return await showProjectPage(ctx, page);
     } else if (action.startsWith("project_")) {
       console.log("Нажата кнопка проекта:", action);
       await handleInlineQuery(ctx); // Обрабатываем запрос для проекта
