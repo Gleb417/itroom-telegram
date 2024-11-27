@@ -6,14 +6,22 @@ export async function tokenHandler(ctx, chatTokens, authState) {
   const chatId = ctx.chat.id;
   const token = ctx.message.text.trim();
 
+  // Проверяем, есть ли состояние авторизации
   if (!authState) {
     throw new Error("authState is not initialized.");
   }
 
+  // Инициализируем состояние авторизации, если его нет
   if (!authState.has(chatId)) {
     authState.set(chatId, { step: 0 });
   }
 
+  // Проверяем, если пользователь уже авторизован
+  if (chatTokens.has(chatId)) {
+    return ctx.reply("Вы уже авторизованы!");
+  }
+
+  // Проверка на введённый токен
   if (!token) {
     return ctx.reply("Введите валидный токен GitHub.");
   }
@@ -42,9 +50,9 @@ export async function tokenHandler(ctx, chatTokens, authState) {
       await user.save();
     }
 
-    // Завершаем состояние ожидания
+    // Завершаем процесс авторизации, сохраняем токен
     chatTokens.set(chatId, token);
-    authState.delete(chatId);
+    authState.delete(chatId); // Убираем состояние ожидания авторизации
 
     ctx.reply(`Токен сохранен! Вы авторизованы как ${username}.`);
   } catch (error) {

@@ -8,6 +8,7 @@ const bot = new Bot(config.BOT_API_KEY);
 
 // Настраиваем сессии
 setupSession(bot);
+
 // Создаем `chatTokens` и `authState`
 const chatTokens = new Map(); // Хранилище токенов для чатов
 const authState = new Map(); // Хранилище состояний авторизации

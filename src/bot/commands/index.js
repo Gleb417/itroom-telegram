@@ -84,18 +84,52 @@ export async function registerCommands(
     "Вывод списка доступных команд и их описания."
   );
   // Обработка текстовых сообщений (например, токена)
+  // Обработка текстовых сообщений
   bot.on("message:text", async (ctx) => {
     const userState = userStates.get(ctx.chat.id) || "free";
+    const text = ctx.message.text.trim();
+    const chatId = ctx.chat.id;
+    const isAuthorized = chatTokens.has(chatId); // Проверка на авторизацию
 
+    // Если пользователь в процессе выполнения задачи, возвращаем сообщение
     if (userState === "busy") {
       return ctx.reply("Вы находитесь в процессе выполнения задачи.");
     }
 
-    // Обрабатываем новый токен или сообщение
+    // Проверка на состояние "ожидание токена"
     if (ctx.session.awaitingToken) {
-      await handleNewToken(ctx);
+      // Если ожидается ввод токена, обрабатываем его
+      await handleNewToken(ctx, chatTokens, authState);
+      return; // После обработки токена выходим из функции
+    }
+
+    // Обрабатываем текст, если пользователь авторизован
+    if (isAuthorized) {
+      // Обрабатываем команды
+      if (text === "Помощь") {
+        await helpCommand(ctx); // Обработка команды помощи
+      } else if (text === "Проекты") {
+        await projectsCommand(ctx); // Обработка команды проектов
+      } else if (text === "Авторизация") {
+        await ctx.reply("Вы уже авторизованы.");
+      } else {
+        // Если команда не распознана
+        await ctx.reply("Я не понимаю такую команду. Попробуйте ещё раз.");
+      }
     } else {
-      tokenHandler(ctx, chatTokens, authState);
+      // Если пользователь не авторизован
+      if (text === "Авторизация") {
+        await authCommand(ctx); // Запускаем процесс авторизации
+      } else if (text === "Помощь") {
+        await helpCommand(ctx); // Обработка команды помощи
+      } else if (text === "Проекты") {
+        await projectsCommand(ctx); // Обработка команды проектов
+      } else {
+        // Если команду не распознали, отправляем сообщение о необходимости авторизации
+        await ctx.reply(
+          "Вы не авторизованы. Для начала используйте команду /auth."
+        );
+      }
     }
   });
 

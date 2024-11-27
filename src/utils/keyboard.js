@@ -5,11 +5,12 @@ export async function setUserKeyboard(ctx, state) {
 
   if (state === "free") {
     keyboard = new Keyboard()
-      .text("/auth")
-      .text("/help")
+      .text("Авторизация") // Заменили команду /auth на текст
+      .text("Помощь") // Заменили команду /help на текст
       .row()
-      .text("/project") // Добавляем команду /project
-      .text("/other_command");
+      .text("Проекты") // Заменили команду /project на текст
+      .row()
+      .text("Другие команды"); // Дополнительная кнопка для других действий
   } else if (state === "busy") {
     keyboard = new Keyboard().text("Завершить задачу").row();
   }

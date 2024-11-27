@@ -1,11 +1,12 @@
 import { InlineKeyboard } from "grammy";
 import db from "../../db/models/index.js";
+import axios from "axios";
 
 function escapeMarkdownV2(text) {
   return text.replace(/([\\_*[\]()>#+.!$&|{}=])/g, "\\$1").replace(/-/g, "\\-");
 }
 // Команда для авторизации
-export async function authCommand(ctx) {
+export async function authCommand(ctx, chatTokens, authState) {
   const userId = ctx.from.id;
 
   // Ищем пользователя в базе данных
@@ -24,7 +25,9 @@ export async function authCommand(ctx) {
         ),
       }
     );
+    chatTokens.set(ctx.chat.id, user.github_token); // Добавляем токен в chatTokens
   } else {
+    ctx.session.awaitingToken = true;
     // Пользователь не авторизован, отправляем инструкцию
     const message = `
   Вы еще не авторизованы. Для авторизации вам нужно создать личный токен доступа на GitHub.
@@ -45,15 +48,18 @@ export async function authCommand(ctx) {
 }
 
 // Callback для изменения токена
+// Callback для изменения токена
+// Callback для изменения токена
 export async function changeTokenCallback(ctx) {
   const userId = ctx.from.id;
 
+  // Проверяем, авторизован ли пользователь
   const user = await db.User.findOne({ where: { telegram_id: userId } });
 
   if (user) {
     // Устанавливаем флаг ожидания нового токена
+    ctx.session.awaitingToken = true; // Устанавливаем флаг ожидания токена
     await ctx.reply("Введите новый GitHub токен:");
-    ctx.session.awaitingToken = true;
   } else {
     await ctx.reply(
       "Вы ещё не авторизованы. Используйте /auth для начала авторизации."
@@ -65,30 +71,59 @@ export async function changeTokenCallback(ctx) {
 }
 
 // Обработка нового токена
-export async function handleNewToken(ctx) {
-  const userId = ctx.from.id;
+export async function handleNewToken(ctx, chatTokens, authState) {
+  const chatId = ctx.chat.id;
+  const token = ctx.message.text.trim();
 
-  // Проверяем, ожидается ли токен
-  if (ctx.session.awaitingToken) {
-    const newToken = ctx.message.text;
+  // Проверяем, если пользователь уже авторизован
+  if (chatTokens.has(chatId)) {
+    return ctx.reply("Вы уже авторизованы!");
+  }
 
-    // Сохраняем или обновляем токен в базе данных
-    const [user, created] = await db.User.findOrCreate({
-      where: { telegram_id: userId },
-      defaults: {
-        telegram_id: userId,
-        github_token: newToken,
-        github_username: "Не указано", // Дополнительно можно запросить GitHub username
-      },
+  // Проверка на введённый токен
+  if (!token) {
+    return ctx.reply("Введите валидный токен GitHub.");
+  }
+
+  try {
+    // Проверяем токен через GitHub API
+    const response = await axios.get("https://api.github.com/user", {
+      headers: { Authorization: `Bearer ${token}` },
     });
 
-    if (!created) {
-      user.github_token = newToken;
+    const username = response.data.login;
+
+    // Сохраняем токен в базе данных
+    let user = await db.User.findOne({ where: { telegram_id: chatId } });
+
+    if (!user) {
+      // Если пользователя нет, создаем его
+      user = await db.User.create({
+        telegram_id: chatId,
+        github_username: username,
+        github_token: token,
+      });
+    } else {
+      // Если пользователь есть, обновляем токен
+      user.github_token = token;
       await user.save();
     }
 
-    ctx.session.awaitingToken = false; // Сбрасываем состояние
+    // Завершаем процесс авторизации, сохраняем токен
+    chatTokens.set(chatId, token);
+    authState.delete(chatId); // Убираем состояние ожидания авторизации
+    ctx.session.awaitingToken = false; // Сбрасываем флаг в сессии
 
-    await ctx.reply("Ваш GitHub токен успешно сохранён!");
+    ctx.reply(`Токен сохранен! Вы авторизованы как ${username}.`);
+  } catch (error) {
+    console.error("Ошибка проверки токена:", error.message);
+
+    if (error.response?.status === 401) {
+      return ctx.reply("Неверный токен. Попробуйте ввести правильный токен.");
+    } else {
+      return ctx.reply(
+        "Произошла ошибка при проверке токена. Попробуйте позже."
+      );
+    }
   }
 }
