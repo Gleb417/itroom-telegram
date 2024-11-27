@@ -6,7 +6,7 @@ const PORT = 3001
 
 // Массив для хранения данных о полученных событиях Webhook
 let webhookData = []
-const MAX_EVENTS = 1 // Максимальное количество событий для хранения
+const MAX_EVENTS = 2 // Максимальное количество событий для хранения
 
 // Middleware для обработки JSON-данных в теле запросов
 app.use(express.json())
