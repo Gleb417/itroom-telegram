@@ -179,7 +179,6 @@ async function getProjectFields(userToken, projectId) {
       console.error("Поля проекта не найдены или данные некорректны.");
       return [];
     }
-    console.log(fields);
 
     return fields;
   } catch (error) {

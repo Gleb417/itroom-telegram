@@ -8,6 +8,8 @@ import {
 } from "../../services/githubService.js";
 import db from "../../db/models/index.js";
 
+const ITEMS_PER_PAGE = 20;
+
 // Команда для отображения репозиториев
 export async function projectsCommand(ctx) {
   console.log("Команда /project вызвана");
@@ -29,16 +31,79 @@ export async function projectsCommand(ctx) {
       return ctx.reply("У вас нет доступных репозиториев.");
     }
 
-    const keyboard = new InlineKeyboard();
-    repositories.forEach((repo) => {
-      keyboard.text(repo.name, `repo_${repo.id}`).row();
-    });
+    // Сохраняем репозитории в сессии (или в базе данных)
+    ctx.session.repositories = repositories;
 
-    await ctx.reply("Выберите репозиторий:", { reply_markup: keyboard });
+    // Показываем первую страницу
+    await showRepositoryPage(ctx, 1);
   } catch (error) {
     console.error("Ошибка в projectsCommand:", error.message);
     ctx.reply("Произошла ошибка при обработке команды. Попробуйте позже.");
   }
+}
+
+// Функция для отображения страницы с репозиториями
+export async function showRepositoryPage(ctx, page) {
+  const repositories = ctx.session.repositories || [];
+  const totalPages = Math.ceil(repositories.length / ITEMS_PER_PAGE);
+
+  // Проверяем, что номер страницы корректен
+  if (page < 1 || page > totalPages) {
+    return ctx.reply("Недействительный номер страницы.");
+  }
+
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const pageRepositories = repositories.slice(startIndex, endIndex);
+
+  const keyboard = new InlineKeyboard();
+  pageRepositories.forEach((repo) => {
+    keyboard.text(repo.name, `repo_${repo.id}`).row();
+  });
+
+  // Добавляем кнопки "Назад" и "Вперед"
+  if (page > 1) {
+    keyboard.text("⬅ Назад", `page_${page - 1}`);
+  }
+  if (page < totalPages) {
+    keyboard.text("Вперед ➡", `page_${page + 1}`);
+  }
+
+  // Показываем текущую страницу
+  await ctx.reply(`Страница ${page} из ${totalPages}`, {
+    reply_markup: keyboard,
+  });
+}
+
+// Показать проекты с пагинацией
+export async function showProjectPage(ctx, page) {
+  const projects = ctx.session.projects || [];
+  const totalPages = Math.ceil(projects.length / ITEMS_PER_PAGE);
+
+  if (page < 1 || page > totalPages) {
+    return ctx.reply("Недействительный номер страницы.");
+  }
+
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const pageProjects = projects.slice(startIndex, endIndex);
+
+  const keyboard = new InlineKeyboard();
+  pageProjects.forEach((project) => {
+    const repoId = ctx.session.currentRepoId; // Получаем текущий репозиторий из сессии
+    keyboard.text(project.title, `project_${project.id}_${repoId}`).row();
+  });
+
+  if (page > 1) {
+    keyboard.text("⬅ Назад", `project_page_${page - 1}`);
+  }
+  if (page < totalPages) {
+    keyboard.text("Вперед ➡", `project_page_${page + 1}`);
+  }
+
+  await ctx.reply(`Проекты. Страница ${page} из ${totalPages}`, {
+    reply_markup: keyboard,
+  });
 }
 
 // Обработка inline-запросов (выбор репозитория, проекта и задачи)
@@ -59,6 +124,13 @@ export async function handleInlineQuery(ctx) {
 
     const userToken = user.github_token;
 
+    if (action.startsWith("page_")) {
+      // Обработка кнопок для перехода по страницам
+      const page = parseInt(action.split("_")[1], 10);
+      return await showRepositoryPage(ctx, page);
+    }
+
+    // Обработка репозитория
     // Обработка репозитория
     if (action.startsWith("repo_")) {
       const repoId = action.split("_")[1];
@@ -84,13 +156,12 @@ export async function handleInlineQuery(ctx) {
         return ctx.reply("В этом репозитории нет проектов.");
       }
 
-      const keyboard = new InlineKeyboard();
-      projects.forEach((project) => {
-        keyboard.text(project.title, `project_${project.id}_${repoId}`).row();
-      });
+      // Сохраняем проекты в сессии
+      ctx.session.projects = projects;
+      ctx.session.currentRepoId = repoId; // Сохраняем текущий репозиторий для контекста
 
-      await ctx.answerCallbackQuery();
-      return ctx.reply("Выберите проект:", { reply_markup: keyboard });
+      // Показываем первую страницу проектов
+      await showProjectPage(ctx, 1);
     }
 
     // Обработка проекта (получение задач)
@@ -111,7 +182,6 @@ export async function handleInlineQuery(ctx) {
       }
 
       const tasks = await getTasks(userToken, projectId);
-      console.log("Полученные задачи:", tasks);
 
       if (!tasks.length) {
         return ctx.reply("В этом проекте нет задач.");
