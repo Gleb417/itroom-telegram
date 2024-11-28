@@ -8,7 +8,7 @@ import {
 } from "../../services/githubService.js";
 import db from "../../db/models/index.js";
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 3;
 
 // Команда для отображения репозиториев
 export async function projectsCommand(ctx) {
@@ -102,6 +102,72 @@ export async function showProjectPage(ctx, page) {
   }
 
   await ctx.reply(`Проекты. Страница ${page} из ${totalPages}`, {
+    reply_markup: keyboard,
+  });
+}
+
+export async function showTasksPage(ctx, tasks, page, deadlineField) {
+  const totalPages = Math.ceil(tasks.length / ITEMS_PER_PAGE);
+
+  if (page < 1 || page > totalPages) {
+    return ctx.reply("Недействительный номер страницы.");
+  }
+
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const pageTasks = tasks.slice(startIndex, endIndex);
+
+  const keyboard = new InlineKeyboard();
+
+  pageTasks.forEach((task) => {
+    const taskName = task.title || "Без названия";
+    const deadline = task.fields[deadlineField.name]
+      ? new Date(task.fields[deadlineField.name]).toLocaleDateString()
+      : "Нет дедлайна";
+
+    keyboard
+      .text(`${taskName} (Дедлайн: ${deadline})`, `task_${task.id}`)
+      .row();
+  });
+
+  if (page > 1) {
+    keyboard.text("⬅ Назад", `tasks_page_${page - 1}`);
+  }
+  if (page < totalPages) {
+    keyboard.text("Вперед ➡", `tasks_page_${page + 1}`);
+  }
+
+  await ctx.editMessageText(`Страница ${page} из ${totalPages}`, {
+    reply_markup: keyboard,
+  });
+}
+
+export async function showPaginatedTasks(ctx, tasks, page) {
+  const totalPages = Math.ceil(tasks.length / ITEMS_PER_PAGE);
+
+  if (page < 1 || page > totalPages) {
+    return ctx.reply("Недействительный номер страницы.");
+  }
+
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const pageTasks = tasks.slice(startIndex, endIndex);
+
+  const keyboard = new InlineKeyboard();
+
+  pageTasks.forEach((task) => {
+    const taskName = task.title || "Без названия";
+    keyboard.text(taskName, `task_${task.id}`).row();
+  });
+
+  if (page > 1) {
+    keyboard.text("⬅️ Назад", `taskss_page_${page - 1}`);
+  }
+  if (page < totalPages) {
+    keyboard.text("Вперёд ➡️", `taskss_page_${page + 1}`);
+  }
+
+  await ctx.editMessageText(`Страница ${page} из ${totalPages}`, {
     reply_markup: keyboard,
   });
 }
@@ -226,51 +292,39 @@ export async function handleInlineQuery(ctx) {
 
     // Обработка выбора поля для дедлайна или кнопки "Пропустить"
     if (action.startsWith("deadline_")) {
-      const actionWithoutPrefix = action.slice(9); // Получаем строку без "deadline_"
+      const actionWithoutPrefix = action.slice(9);
 
-      // Разделяем строку по символу "_"
       const actionParts = actionWithoutPrefix.split("_");
-
-      // fieldId - это все части до последних двух
       const fieldId = actionParts.slice(0, actionParts.length - 2).join("_");
-
-      // projectId - это последние две части
       const projectId = actionParts.slice(actionParts.length - 2).join("_");
 
       console.log("Полный полученный айди:", action);
-      console.log("Айди поля:", fieldId); // Например, PVTF_lADOC06YzM4AtG5Yzgj7GLI
-      console.log("Айди проекта:", projectId); // Например, PVT_kwDOC06YzM4AtG5Y
+      console.log("Айди поля:", fieldId);
+      console.log("Айди проекта:", projectId);
 
-      // Получаем задачи и сортируем по выбранному полю
       const tasks = await getTasks(userToken, projectId);
       const projectFields = await getProjectFields(userToken, projectId);
-
-      // Находим выбранное поле
       const deadlineField = projectFields.find((field) => field.id === fieldId);
 
       if (!deadlineField) {
         return ctx.reply("Не удалось найти выбранное поле.");
       }
 
-      // Фильтрация задач по назначенному пользователю
       const tasksWithDetails = await Promise.all(
         tasks.map(async (task) => {
           const taskDetails = await getTaskDetails(userToken, task.id);
-          return { ...task, details: taskDetails }; // Добавляем подробности задачи
+          return { ...task, details: taskDetails };
         })
       );
 
-      // Фильтруем задачи по назначенному пользователю
       const assignedTasks = tasksWithDetails.filter((task) => {
         const assigneesString = task.details?.assignees;
-        if (!assigneesString) return false; // Если исполнители отсутствуют, исключаем задачу
+        if (!assigneesString) return false;
 
-        // Преобразуем строку исполнителей в массив логинов
         const assignees = assigneesString
           .split(",")
           .map((assignee) => assignee.trim());
 
-        // Проверяем, есть ли текущий пользователь среди исполнителей
         return assignees.includes(user.github_username);
       });
 
@@ -278,7 +332,6 @@ export async function handleInlineQuery(ctx) {
         return ctx.reply("Вы не назначены на задачи в этом проекте.");
       }
 
-      // Сортируем задачи по дедлайну
       const sortedTasks = assignedTasks.sort((a, b) => {
         const deadlineA = a.fields[deadlineField.name];
         const deadlineB = b.fields[deadlineField.name];
@@ -288,70 +341,80 @@ export async function handleInlineQuery(ctx) {
         return new Date(deadlineA) - new Date(deadlineB);
       });
 
-      // Показываем отсортированные задачи с дедлайнами
-      const keyboard = new InlineKeyboard();
-      sortedTasks.forEach((task) => {
-        const taskText = task.title || "Без названия"; // Используем резервное название
-        const deadline = task.fields[deadlineField.name]; // Получаем дедлайн из задачи
+      // Сохраняем задачи в сессии
+      ctx.session.sortedTasks = sortedTasks;
+      ctx.session.deadlineField = deadlineField;
 
-        // Если есть дедлайн, добавляем его в текст задачи
-        const taskDisplayText = deadline
-          ? `${taskText} (Дедлайн: ${new Date(deadline).toLocaleDateString()})`
-          : taskText;
-
-        keyboard.text(taskDisplayText, `task_${task.id}`).row();
-      });
-
-      await ctx.reply("Задачи отсортированы по дедлайну:", {
-        reply_markup: keyboard,
-      });
+      // Показываем первую страницу
+      await showTasksPage(ctx, sortedTasks, 1, deadlineField);
     }
 
     // Обработка кнопки "Пропустить"
-    if (action.startsWith("skip_")) {
-      // Извлекаем projectId из строки callback
-      const actionWithoutPrefix = action.slice(5); // Убираем префикс "skip_"
-      const projectId = actionWithoutPrefix; // В данном случае, это будет projectId
+    // Обработка кнопки "Пропустить"
+    if (action.startsWith("tasks_page_")) {
+      const page = parseInt(action.split("_")[2], 10);
+      const sortedTasks = ctx.session.sortedTasks || [];
+      const deadlineField = ctx.session.deadlineField;
 
-      console.log("Нажата кнопка Пропустить для проекта:", projectId);
-
-      // Получаем задачи по projectId
-      const tasks = await getTasks(userToken, projectId);
-      const tasksWithDetails = await Promise.all(
-        tasks.map(async (task) => {
-          const taskDetails = await getTaskDetails(userToken, task.id);
-          return { ...task, details: taskDetails }; // Добавляем подробности задачи
-        })
-      );
-
-      // Фильтруем задачи по назначенному пользователю
-      const assignedTasks = tasksWithDetails.filter((task) => {
-        const assigneesString = task.details?.assignees;
-        if (!assigneesString) return false; // Если исполнители отсутствуют, исключаем задачу
-
-        // Преобразуем строку исполнителей в массив логинов
-        const assignees = assigneesString
-          .split(",")
-          .map((assignee) => assignee.trim());
-
-        // Проверяем, есть ли текущий пользователь среди исполнителей
-        return assignees.includes(user.github_username);
-      });
-
-      if (assignedTasks.length === 0) {
-        return ctx.reply("Вы не назначены на задачи в этом проекте.");
+      if (!sortedTasks.length) {
+        return ctx.reply("Задачи отсутствуют.");
       }
 
-      // Показываем все задачи без сортировки
-      const keyboard = new InlineKeyboard();
-      assignedTasks.forEach((task) => {
-        const taskText = task.title || "Без названия"; // Используем резервное название
-        keyboard.text(taskText, `task_${task.id}`).row();
-      });
+      await showTasksPage(ctx, sortedTasks, page, deadlineField);
+    }
+    if (action.startsWith("taskss_page_")) {
+      const page = parseInt(action.split("_")[2], 10);
+      const task = ctx.session.assignedTasks;
+      if (!task.length) {
+        return ctx.reply("Задачи отсутвуют.");
+      }
+      await showPaginatedTasks(ctx, task, page);
+    }
 
-      await ctx.reply("Задачи без сортировки:", {
-        reply_markup: keyboard,
-      });
+    if (action.startsWith("skip_")) {
+      const actionParts = action.split("_");
+      const projectId = `${actionParts[1]}_${actionParts[2]}`;
+
+      try {
+        // Получаем задачи проекта
+        const tasks = await getTasks(userToken, projectId);
+        const tasksWithDetails = await Promise.all(
+          tasks.map(async (task) => {
+            const taskDetails = await getTaskDetails(userToken, task.id);
+            return { ...task, details: taskDetails };
+          })
+        );
+
+        // Фильтруем задачи по назначенному пользователю
+        const assignedTasks = tasksWithDetails.filter((task) => {
+          const assigneesString = task.details?.assignees;
+          if (!assigneesString) return false;
+
+          const assignees = assigneesString
+            .split(",")
+            .map((assignee) => assignee.trim());
+
+          return assignees.includes(user.github_username);
+        });
+
+        if (!assignedTasks.length) {
+          return ctx.reply("Вы не назначены на задачи в этом проекте.");
+        }
+
+        // Сохраняем задачи в сессии
+        ctx.session.assignedTasks = assignedTasks;
+
+        // Показываем страницу задач
+        await showPaginatedTasks(ctx, assignedTasks, 1);
+      } catch (error) {
+        console.error(
+          "Ошибка при обработке кнопки 'Пропустить':",
+          error.message
+        );
+        await ctx.reply(
+          "Произошла ошибка при обработке задач. Попробуйте позже."
+        );
+      }
     }
 
     // Обработка задачи (показ всей информации о задаче)

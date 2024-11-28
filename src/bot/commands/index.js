@@ -11,6 +11,8 @@ import {
   handleInlineQuery,
   showRepositoryPage,
   showProjectPage,
+  showPaginatedTasks,
+  showTasksPage,
 } from "./projectsCommand.js";
 import { showTaskComments } from "./commentsCommand.js";
 
@@ -76,9 +78,29 @@ export async function registerCommands(
     } else if (action.startsWith("deadline_")) {
       console.log("Нажато поле дедлайна:", action);
       await handleInlineQuery(ctx); // Обрабатываем запрос для выбора поля дедлайна
+    } else if (action.startsWith("tasks_page_")) {
+      const page = parseInt(action.split("_")[2], 10);
+      const sortedTasks = ctx.session.sortedTasks || [];
+      const deadlineField = ctx.session.deadlineField;
+      if (!sortedTasks.length) {
+        return ctx.reply("Задачи отсутствуют.");
+      }
+      await showTasksPage(ctx, sortedTasks, page, deadlineField);
     } else if (action.startsWith("skip_")) {
-      console.log("Нажата кнопка Пропустить", action);
-      await handleInlineQuery(ctx); // Обработка кнопки "Пропустить"
+      console.log("Нажата кнопка пропустить:", action);
+      await handleInlineQuery(ctx);
+    } else if (action.startsWith("taskss_page")) {
+      const actionParts = action.split("_");
+      const projectId = `${actionParts[1]}_${actionParts[2]}`;
+      const page = parseInt(actionParts[2]);
+      const task = ctx.session.assignedTasks;
+      console.log(page);
+
+      // Сохраняем текущий проект в сессии
+      ctx.session.projectId = projectId;
+
+      // Вызываем обработчик из `projectsCommand.js`
+      await showPaginatedTasks(ctx, task, page);
     } else if (action === "change_token") {
       await changeTokenCallback(ctx); // Обработка изменения токена
     }
