@@ -4,11 +4,6 @@
  * @returns {string} - Сформированное сообщение.
  */
 export function formatTaskNotification(issue) {
-	if (!issue || !issue.title || !issue.html_url) {
-		console.error('Некорректные данные задачи:', issue)
-		return null // Возвращаем null для пропуска уведомления
-	}
-
 	const { title, html_url, assignees, created_at, labels, state } = issue
 
 	const labelsText =

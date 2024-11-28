@@ -19,7 +19,7 @@ const processedEvents = new Set()
 
 // Функция очистки устаревших событий
 function cleanupProcessedEvents(eventId) {
-	setTimeout(() => processedEvents.delete(eventId), 300000) // Удаляем через 5 минут
+	setTimeout(() => processedEvents.delete(eventId), 300) // Удаляем через ...
 }
 
 // Обработчики событий GitHub Webhooks
