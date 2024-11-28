@@ -34,36 +34,48 @@ export async function showTaskComments(ctx) {
     if (!userToken) return; // Если токен не получен, выходим
     const comments = await getComments(userToken, taskId); // Функция для получения комментариев
 
-    let commentsText = escapeMarkdownV2("Комментариев нет."); // Сообщение, если комментариев нет
-
     if (comments && comments.length > 0) {
-      commentsText = "";
-      const chunkSize = 4000; // Максимальное количество символов для одного сообщения
-      let currentChunk = "";
-
       for (const comment of comments) {
+        // Находим ссылки на изображения
+        const imageLinks = Array.from(
+          comment.body.matchAll(/!\[Image\]\((https:\/\/.*?)\)/g),
+          (match) => match[1]
+        );
+
+        // Удаляем ссылки из текста комментария
+        const cleanedBody = comment.body.replace(
+          /!\[Image\]\(https:\/\/.*?\)/g,
+          ""
+        );
+
+        // Формируем текст комментария
         const commentText = `
 🖊 **Автор:** ${escapeMarkdownV2(comment.user.login)}
 📅 **Дата:** ${escapeMarkdownV2(new Date(comment.createdAt).toLocaleString())}
-💬 **Комментарий:**\n${escapeMarkdownV2(comment.body)}
+💬 **Комментарий:**\n${escapeMarkdownV2(cleanedBody)}
 `;
 
-        // Если текущий блок слишком длинный, отправляем его и начинаем новый
-        if (currentChunk.length + commentText.length > chunkSize) {
-          await ctx.reply(currentChunk, { parse_mode: "MarkdownV2" });
-          currentChunk = commentText; // Новый блок
-        } else {
-          currentChunk += commentText;
-        }
-      }
+        if (imageLinks.length > 0) {
+          // Формируем массив медиа для отправки
+          const mediaGroup = imageLinks.map((url, index) => ({
+            type: "photo",
+            media: url,
+            caption: index === 0 ? commentText : "", // Текст добавляется только к первой картинке
+            parse_mode: index === 0 ? "MarkdownV2" : undefined,
+          }));
 
-      // Отправляем последний блок, если есть остатки
-      if (currentChunk) {
-        await ctx.reply(currentChunk, { parse_mode: "MarkdownV2" });
+          // Отправляем текст и изображения как одну группу
+          await ctx.replyWithMediaGroup(mediaGroup);
+        } else {
+          // Если изображений нет, отправляем только текст
+          await ctx.reply(commentText, { parse_mode: "MarkdownV2" });
+        }
       }
     } else {
       // Если комментариев нет, отправляем это сообщение
-      await ctx.reply(commentsText, { parse_mode: "MarkdownV2" });
+      await ctx.reply(escapeMarkdownV2("Комментариев нет."), {
+        parse_mode: "MarkdownV2",
+      });
     }
 
     await ctx.answerCallbackQuery(); // Подтверждаем действие

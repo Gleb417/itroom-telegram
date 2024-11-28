@@ -355,6 +355,15 @@ async function getTaskDetails(userToken, taskId) {
                   login
                 }
               }
+              number
+              repository {
+                owner {
+                  login
+                }
+                name
+                isInOrganization
+              }
+              id
             }
             ... on DraftIssue {
               title
@@ -393,6 +402,9 @@ async function getTaskDetails(userToken, taskId) {
               }
             }
           }
+          project {
+            number
+          }
         }
       }
     }
@@ -424,6 +436,8 @@ async function getTaskDetails(userToken, taskId) {
       throw new Error("Задача не найдена.");
     }
 
+    const issue = taskData.content;
+
     const fields = taskData.fieldValues.nodes.map((fieldValue) => {
       const fieldName = fieldValue?.field?.name || "Unknown";
       let value;
@@ -439,17 +453,24 @@ async function getTaskDetails(userToken, taskId) {
     });
 
     const assignees =
-      taskData.content?.assignees?.nodes
-        ?.map((assignee) => assignee.login)
-        .join(", ") || "Не назначен";
+      issue?.assignees?.nodes?.map((assignee) => assignee.login).join(", ") ||
+      "Не назначен";
+
+    const projectNumber = taskData.project?.number || "Unknown";
+
+    // Определяем ссылку на основе isInOrganization
+    const ownerType = issue?.repository?.isInOrganization ? "orgs" : "users";
+    const customUrl = issue?.repository
+      ? `https://github.com/${ownerType}/${issue.repository.owner.login}/projects/${projectNumber}/views/1?pane=issue&itemId=${taskData.id}&issue=${issue.repository.owner.login}%7C${issue.repository.name}%7C${issue.number}`
+      : issue?.url;
 
     const taskDetails = {
       id: taskData.id,
-      title: taskData.content?.title || "Без названия",
-      body: taskData.content?.body || "Нет описания",
-      url: taskData.content?.url || null,
-      createdAt: taskData.content?.createdAt || null,
-      updatedAt: taskData.content?.updatedAt || null,
+      title: issue?.title || "Без названия",
+      body: issue?.body || "Нет описания",
+      url: customUrl,
+      createdAt: issue?.createdAt || null,
+      updatedAt: issue?.updatedAt || null,
       assignees,
       fields,
     };
