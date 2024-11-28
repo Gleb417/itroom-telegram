@@ -15,11 +15,12 @@ export function formatStatusNotification(action, issue) {
 			? assignees.map(a => a.login).join(', ')
 			: 'Не указано'
 
-	return (
+	const message =
 		`${statusAction}\n\n` +
 		`*Заголовок:* ${title}\n` +
 		`*Ссылка:* [Открыть задачу](${html_url})\n` +
 		`*Дата изменения:* ${new Date(updated_at).toLocaleString('ru-RU')}\n` +
 		`*Назначено на:* ${assigneesText}`
-	)
+
+	return { message }
 }
