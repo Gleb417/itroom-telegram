@@ -65,21 +65,9 @@ export async function registerCommands(
   Выберите действие с помощью кнопок ниже.
     `;
 
-    // Клавиатура с кнопками
-    const keyboard = {
-      reply_markup: {
-        keyboard: [
-          [{ text: "Авторизация" }, { text: "Проекты" }],
-          [{ text: "Помощь" }],
-        ],
-        resize_keyboard: true, // Клавиатура подстраивается под экран
-        one_time_keyboard: false, // Клавиатура остаётся на экране
-      },
-    };
-
     try {
       // Отправляем сообщение с клавиатурой
-      await ctx.reply(welcomeMessage, keyboard);
+      await ctx.reply(welcomeMessage, await setUserKeyboard(ctx, "free"));
     } catch (error) {
       console.error("Ошибка отправки приветственного сообщения:", error);
       await ctx.reply("Не удалось отправить приветственное сообщение.");
@@ -136,7 +124,7 @@ export async function registerCommands(
       // Вызываем обработчик из `projectsCommand.js`
       await showPaginatedTasks(ctx, task, page);
     } else if (action === "change_token") {
-      await changeTokenCallback(ctx); // Обработка изменения токена
+      await changeTokenCallback(ctx); // Обрабатываем изменение токена
     }
 
     await ctx.answerCallbackQuery(); // Убираем индикатор загрузки
@@ -157,46 +145,39 @@ export async function registerCommands(
     const userState = userStates.get(ctx.chat.id) || "free";
     const text = ctx.message.text.trim();
     const chatId = ctx.chat.id;
-    const isAuthorized = chatTokens.has(chatId); // Проверка на авторизацию
+    const isAuthorized = chatTokens.has(chatId);
 
-    // Если пользователь в процессе выполнения задачи, возвращаем сообщение
+    // Если ожидается ввод токена, обрабатываем его в приоритетном порядке
+    if (ctx.session.awaitingToken) {
+      await handleNewToken(ctx, chatTokens, authState);
+      return; // Завершаем обработку
+    }
+
     if (userState === "busy") {
       return ctx.reply("Вы находитесь в процессе выполнения задачи.");
     }
 
-    // Проверка на состояние "ожидание токена"
-    if (ctx.session.awaitingToken) {
-      // Если ожидается ввод токена, обрабатываем его
-      await handleNewToken(ctx, chatTokens, authState);
-      return; // После обработки токена выходим из функции
-    }
-
-    // Обрабатываем текст, если пользователь авторизован
     if (isAuthorized) {
-      // Обрабатываем команды
+      // Обработка других текстовых команд для авторизованных пользователей
       if (text === "Помощь") {
-        await helpCommand(ctx); // Обработка команды помощи
+        await helpCommand(ctx);
       } else if (text === "Проекты") {
-        await projectsCommand(ctx); // Обработка команды проектов
+        await projectsCommand(ctx);
       } else if (text === "Авторизация") {
         await ctx.reply("Вы уже авторизованы.");
       } else {
-        // Если команда не распознана
         await ctx.reply("Я не понимаю такую команду. Попробуйте ещё раз.");
       }
     } else {
-      // Если пользователь не авторизован
+      // Обработка для неавторизованных пользователей
       if (text === "Авторизация") {
-        await authCommand(ctx, chatTokens, authState); // Запускаем процесс авторизации
+        await authCommand(ctx, chatTokens, authState);
       } else if (text === "Помощь") {
-        await helpCommand(ctx); // Обработка команды помощи
+        await helpCommand(ctx);
       } else if (text === "Проекты") {
-        await projectsCommand(ctx); // Обработка команды проектов
+        await ctx.reply("Сначала авторизуйтесь, используя команду /auth.");
       } else {
-        // Если команду не распознали, отправляем сообщение о необходимости авторизации
-        await ctx.reply(
-          "Вы не авторизованы. Для начала используйте команду /auth."
-        );
+        await ctx.reply("Я не понимаю такую команду. Попробуйте ещё раз.");
       }
     }
   });

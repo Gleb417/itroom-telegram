@@ -8,7 +8,7 @@ import {
 } from "../../services/githubService.js";
 import db from "../../db/models/index.js";
 
-const ITEMS_PER_PAGE = 3;
+const ITEMS_PER_PAGE = 20;
 
 // Команда для отображения репозиториев
 export async function projectsCommand(ctx) {
