@@ -17,10 +17,10 @@ export function formatStatusNotification(action, issue) {
 
 	const message =
 		`${statusAction}\n\n` +
-		`*Заголовок:* ${title}\n` +
-		`*Ссылка:* [Открыть задачу](${html_url})\n` +
-		`*Дата изменения:* ${new Date(updated_at).toLocaleString('ru-RU')}\n` +
-		`*Назначено на:* ${assigneesText}`
+		`📌 *Заголовок задачи:* ${title}\n` +
+		`🔗 *Ссылка:* [Открыть задачу](${html_url})\n` +
+		`📅 *Дата изменения:* ${new Date(updated_at).toLocaleString('ru-RU')}\n` +
+		`👥 *Назначено на:* ${assigneesText}`
 
 	return { message }
 }

@@ -20,10 +20,12 @@ export function formatCommentNotification(comment, issue) {
 	// Формируем текстовое сообщение
 	const message =
 		`💬 *Новый комментарий в задаче!*\n\n` +
-		`*Задача:* [${issue.title}](${issue.html_url})\n` +
-		`*Автор комментария:* ${user.login}\n` +
-		`*Комментарий:* ${body.replace(imageRegex, '').trim() || 'Без текста'}\n` +
-		`*Дата комментария:* ${new Date(created_at).toLocaleString('ru-RU')}`
+		`📌 *Задача:* [${issue.title}](${issue.html_url})\n` +
+		`🖋 *Автор комментария:* ${user.login}\n` +
+		`📝 *Текст комментария:* ${
+			body.replace(imageRegex, '').trim() || 'Без текста'
+		}\n` +
+		`📅 *Дата комментария:* ${new Date(created_at).toLocaleString('ru-RU')}`
 
 	return { message, images }
 }

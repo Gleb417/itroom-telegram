@@ -42,14 +42,13 @@ export function formatProjectCardStatusNotification(
 
 	// Формируем сообщение
 	const message =
-		`${statusAction}\n\n` + // Добавляем заголовок с изменением статуса
-		`*Заголовок:* ${taskDetail.title}\n` + // Заголовок задачи
-		`*Ссылка:* [Открыть задачу](${taskDetail.url})\n` + // Ссылка на задачу
-		`*Старый статус:* ${getColorEmoji(fromColor)} ${from.name}\n` + // Старый статус с эмодзи цвета
-		`*Новый статус:* ${getColorEmoji(toColor)} ${to.name}\n` + // Новый статус с эмодзи цвета
-		`*Дата изменения:* ${new Date(taskDetail.updatedAt).toLocaleString(
+		`${statusAction}\n\n` +
+		`📌 *Задача:* [${taskDetail.title}](${taskDetail.url})\n` +
+		`❌ *Старый статус:* ${getColorEmoji(fromColor)} ${from.name}\n` +
+		`✅ *Новый статус:* ${getColorEmoji(toColor)} ${to.name}\n` +
+		`📅 *Дата изменения:* ${new Date(taskDetail.updatedAt).toLocaleString(
 			'ru-RU'
-		)}\n` // Дата изменения в локальном формате
+		)}`
 
 	// Возвращаем сообщение в формате Markdown
 	return { message }
