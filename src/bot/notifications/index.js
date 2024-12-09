@@ -187,7 +187,7 @@ export async function notify(event, payload) {
 				payload.assignees ||
 				notification.taskDetail?.assignees ||
 				[]
-			console.log(assignees)
+			// console.log(assignees)
 		}
 
 		if (!Array.isArray(assignees) || assignees.length === 0) {
