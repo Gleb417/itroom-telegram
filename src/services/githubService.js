@@ -74,30 +74,25 @@ async function getTasks(userToken, projectId) {
     );
 
     if (response.data.errors) {
-      console.error("GraphQL ошибки:", response.data.errors);
       throw new Error("Ошибка GraphQL: " + response.data.errors[0]?.message);
     }
 
-    const items = response.data?.data?.node?.items?.nodes;
-
-    if (!items || !Array.isArray(items)) {
-      console.error("Данные задач отсутствуют или некорректны.");
-      return [];
-    }
+    const items = response.data?.data?.node?.items?.nodes || [];
 
     return items.map((item) => {
-      const fields = {};
-      item.fieldValues.nodes.forEach((fieldValue) => {
-        if (fieldValue.field?.name) {
-          fields[fieldValue.field.name] =
+      const fields = item.fieldValues.nodes.reduce((acc, fieldValue) => {
+        const fieldName = fieldValue.field?.name;
+        if (fieldName) {
+          acc[fieldName] =
             fieldValue.text ||
             fieldValue.name ||
             fieldValue.date ||
             fieldValue.number ||
-            fieldValue.title || // Для Iteration Value
+            fieldValue.title ||
             null;
         }
-      });
+        return acc;
+      }, {});
 
       return {
         id: item.id,
@@ -108,12 +103,16 @@ async function getTasks(userToken, projectId) {
       };
     });
   } catch (error) {
-    console.error(
-      "Ошибка при получении задач Projects V2:",
-      error.response?.data || error.message
-    );
+    handleError(error);
     throw new Error("Не удалось получить задачи. Проверьте данные проекта.");
   }
+}
+
+function handleError(error) {
+  console.error(
+    "Ошибка при получении задач Projects V2:",
+    error.response?.data || error.message
+  );
 }
 
 async function getProjectFields(userToken, projectId) {
@@ -169,49 +168,50 @@ async function getProjectFields(userToken, projectId) {
     );
 
     if (response.data.errors) {
-      console.error("GraphQL ошибки:", response.data.errors);
       throw new Error("Ошибка GraphQL: " + response.data.errors[0]?.message);
     }
 
-    const fields = response.data?.data?.node?.fields?.nodes;
+    const fields = response.data?.data?.node?.fields?.nodes || [];
 
-    if (!fields) {
+    if (!fields.length) {
       console.error("Поля проекта не найдены или данные некорректны.");
       return [];
     }
 
-    return fields;
+    return fields.map((field) => ({
+      id: field.id,
+      name: field.name,
+      dataType: field.dataType,
+      options: field.options?.map((option) => option.name) || [],
+    }));
   } catch (error) {
-    console.error(
-      "Ошибка при получении полей проекта:",
-      error.response?.data || error.message
-    );
+    handleError(error);
     throw new Error("Не удалось получить поля проекта.");
   }
 }
 
 async function getComments(userToken, issueId) {
   const query = `
-	query($issueId: ID!) {
-	  node(id: $issueId) {
-		... on ProjectV2Item {
-		  content {
-			... on Issue {
-			  comments(first: 100) {
-				nodes {
-				  id
-				  body
-				  author {
-					login
-				  }
-				  createdAt
-				}
-			  }
-			}
-		  }
-		}
-	  }
-	}
+    query($issueId: ID!) {
+      node(id: $issueId) {
+        ... on ProjectV2Item {
+          content {
+            ... on Issue {
+              comments(first: 100) {
+                nodes {
+                  id
+                  body
+                  author {
+                    login
+                  }
+                  createdAt
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   `;
 
   const variables = { issueId };
@@ -228,39 +228,34 @@ async function getComments(userToken, issueId) {
       }
     );
 
-    if (response.data.errors) {
-      console.error("GraphQL ошибки:", response.data.errors);
-      throw new Error("Ошибка GraphQL: " + response.data.errors[0]?.message);
-    }
+    // Проверка ошибок в GraphQL ответе
+    handleGraphQLErrors(response);
 
-    // Проверяем, что node существует
-    const node = response.data?.data?.node;
+    const comments = response?.data?.data?.node?.content?.comments?.nodes || [];
 
-    if (!node || !node.content || !node.content.comments) {
-      console.log(
-        "Комментарии для задачи не найдены или задача не существует."
-      );
+    if (!comments.length) {
+      console.log("Комментарии не найдены или задача не существует.");
       return [];
     }
 
-    const comments = node.content.comments.nodes;
-
-    return comments.map((comment) => ({
-      id: comment.id,
-      body: comment.body,
-      user: {
-        login: comment.author.login,
-      },
-      createdAt: comment.createdAt,
+    return comments.map(({ id, body, author, createdAt }) => ({
+      id,
+      body,
+      user: { login: author?.login || "Unknown" },
+      createdAt,
     }));
   } catch (error) {
-    console.error(
-      "Ошибка при получении комментариев с использованием GraphQL:",
-      error.response?.data || error.message
-    );
+    handleError(error);
     throw new Error(
       "Не удалось получить комментарии. Проверьте данные задачи."
     );
+  }
+}
+
+function handleGraphQLErrors(response) {
+  if (response.data.errors) {
+    console.error("GraphQL ошибки:", response.data.errors);
+    throw new Error("Ошибка GraphQL: " + response.data.errors[0]?.message);
   }
 }
 
@@ -281,18 +276,18 @@ async function getRepositories(userToken) {
 
 async function getProjectsV2(userToken, owner, repo) {
   const query = `
-		query ($owner: String!, $repo: String!) {
-		  repository(owner: $owner, name: $repo) {
-			projectsV2(first: 10) {
-			  nodes {
-				id
-				title
-				url
-			  }
-			}
-		  }
-		}
-	  `;
+    query ($owner: String!, $repo: String!) {
+      repository(owner: $owner, name: $repo) {
+        projectsV2(first: 10) {
+          nodes {
+            id
+            title
+            url
+          }
+        }
+      }
+    }
+  `;
 
   const variables = { owner, repo };
 
@@ -308,26 +303,21 @@ async function getProjectsV2(userToken, owner, repo) {
       }
     );
 
-    if (response.data.errors) {
-      console.error("GraphQL ошибки:", response.data.errors);
-      throw new Error("Ошибка GraphQL: " + response.data.errors[0]?.message);
-    }
+    // Проверка ошибок GraphQL
+    handleGraphQLErrors(response);
 
-    if (
-      !response.data?.data?.repository?.projectsV2?.nodes ||
-      !Array.isArray(response.data.data.repository.projectsV2.nodes)
-    ) {
-      console.error("Данные проекта отсутствуют или некорректны.");
+    // Извлечение проектов из данных ответа
+    const projects = response?.data?.data?.repository?.projectsV2?.nodes || [];
+
+    if (!projects.length) {
+      console.log("Проекты не найдены или данные некорректны.");
       return [];
     }
 
-    return response.data.data.repository.projectsV2.nodes;
+    return projects;
   } catch (error) {
-    console.error("Ошибка получения Projects (beta):", error.message);
-    if (error.response?.data) {
-      console.error("Дополнительная информация:", error.response.data);
-    }
-    throw new Error(
+    handleError(
+      error,
       "Не удалось получить проекты. Проверьте токен или данные репозитория."
     );
   }
@@ -424,65 +414,63 @@ async function getTaskDetails(userToken, taskId) {
       }
     );
 
-    if (response.data.errors) {
-      console.error("GraphQL ошибки:", response.data.errors);
-      throw new Error("Ошибка GraphQL: " + response.data.errors[0]?.message);
-    }
+    handleGraphQLErrors(response);
 
     const taskData = response.data?.data?.node;
-
     if (!taskData) {
-      console.error("Задача не найдена. taskId:", taskId);
-      throw new Error("Задача не найдена.");
+      throw new Error(`Задача с taskId ${taskId} не найдена.`);
     }
 
     const issue = taskData.content;
-
-    const fields = taskData.fieldValues.nodes.map((fieldValue) => {
-      const fieldName = fieldValue?.field?.name || "Unknown";
-      let value;
-
-      if (fieldValue.name) value = fieldValue.name; // SingleSelect
-      else if (fieldValue.text) value = fieldValue.text; // Text field
-      else if (fieldValue.date) value = fieldValue.date; // Date field
-      else if (fieldValue.number) value = fieldValue.number; // Number field
-      else if (fieldValue.title) value = fieldValue.title; // Iteration field
-      else value = null;
-
-      return { fieldName, value };
-    });
-
-    const assignees =
-      issue?.assignees?.nodes?.map((assignee) => assignee.login).join(", ") ||
-      "Не назначен";
-
+    const fields = formatFields(taskData.fieldValues.nodes);
+    const assignees = formatAssignees(issue?.assignees?.nodes);
     const projectNumber = taskData.project?.number || "Unknown";
+    const url = generateCustomUrl(issue, projectNumber, taskData.id);
 
-    // Определяем ссылку на основе isInOrganization
-    const ownerType = issue?.repository?.isInOrganization ? "orgs" : "users";
-    const customUrl = issue?.repository
-      ? `https://github.com/${ownerType}/${issue.repository.owner.login}/projects/${projectNumber}/views/1?pane=issue&itemId=${taskData.id}&issue=${issue.repository.owner.login}%7C${issue.repository.name}%7C${issue.number}`
-      : issue?.url;
-
-    const taskDetails = {
+    return {
       id: taskData.id,
       title: issue?.title || "Без названия",
       body: issue?.body || "Нет описания",
-      url: customUrl,
+      url,
       createdAt: issue?.createdAt || null,
       updatedAt: issue?.updatedAt || null,
       assignees,
       fields,
     };
-
-    return taskDetails;
   } catch (error) {
-    console.error(
-      "Ошибка при получении данных о задаче:",
-      error.response?.data || error.message
-    );
-    throw new Error("Не удалось получить данные о задаче.");
+    handleError(error, "Не удалось получить данные о задаче.");
   }
+}
+
+// Вспомогательная функция для форматирования полей задачи
+function formatFields(fields) {
+  return fields.map((fieldValue) => {
+    const fieldName = fieldValue?.field?.name || "Unknown";
+    const value =
+      fieldValue.name || // SingleSelect
+      fieldValue.text || // Text field
+      fieldValue.date || // Date field
+      fieldValue.number || // Number field
+      fieldValue.title || // Iteration field
+      null;
+
+    return { fieldName, value };
+  });
+}
+
+// Вспомогательная функция для форматирования списка назначенных пользователей
+function formatAssignees(assignees) {
+  return (
+    assignees?.map((assignee) => assignee.login).join(", ") || "Не назначен"
+  );
+}
+
+// Вспомогательная функция для генерации ссылки на задачу
+function generateCustomUrl(issue, projectNumber, taskId) {
+  if (!issue?.repository) return issue?.url;
+
+  const ownerType = issue.repository.isInOrganization ? "orgs" : "users";
+  return `https://github.com/${ownerType}/${issue.repository.owner.login}/projects/${projectNumber}/views/1?pane=issue&itemId=${taskId}&issue=${issue.repository.owner.login}%7C${issue.repository.name}%7C${issue.number}`;
 }
 
 export {
