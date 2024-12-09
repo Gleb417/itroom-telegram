@@ -120,18 +120,25 @@ async function getNodeID(payload) {
  */
 // Универсальная функция обработки уведомлений.
 export async function notify(event, payload) {
-	const eventId = `${event}-${
-		payload.issue?.id || payload.projects_v2_item?.id || ''
-	}-${payload.action}`
-	// Проверяем, было ли событие обработано
-	if (processedEvents.has(eventId)) {
-		console.warn(`Событие ${eventId} уже обработано.`)
-		return
+	let eventId
+
+	// Генерация уникального идентификатора события
+	if (
+		event === 'issues' &&
+		['unassigned', 'assigned'].includes(payload.action)
+	) {
+		const assigneeLogin = payload.assignee?.login || 'unknown'
+		eventId = `${event}-${payload.issue?.id}-${payload.action}-${assigneeLogin}`
+	} else {
+		eventId = `${event}-${
+			payload.issue?.id || payload.projects_v2_item?.id || ''
+		}-${payload.action}`
 	}
 
 	// Добавляем событие в список обработанных
 	processedEvents.add(eventId)
 	cleanupProcessedEvents(eventId) // Удаляем через 5 минут
+
 	const handler = eventHandlers[event]
 	if (!handler) {
 		console.warn(`Обработчик для события "${event}" не найден.`)
@@ -160,13 +167,19 @@ export async function notify(event, payload) {
 		let assignees = []
 		if (event === 'projects_v2_item') {
 			assignees = await getNodeID(payload) // Используем getNodeID
-		} else if (payload.action === 'unassigned' || 'assigned') {
+		} else if (['unassigned', 'assigned'].includes(payload.action)) {
 			const assignee = payload.assignee // Объект assignee
 			if (assignee && assignee.login) {
 				// Преобразуем объект в массив с одним элементом для унификации
 				assignees = [assignee]
 			} else {
 				console.log('Assignee отсутствует или невалидный:', assignee)
+				// Переход к обработке ниже
+				assignees =
+					payload.issue?.assignees ||
+					payload.assignees ||
+					notification.taskDetail?.assignees ||
+					[]
 			}
 		} else {
 			assignees =
