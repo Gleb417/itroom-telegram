@@ -5,6 +5,8 @@ import { formatCommentNotification } from './commentNotifications.js' // Фор�
 import { formatTaskNotification } from './taskNotifications.js' // Форматирование уведомлений для задач
 import { formatStatusNotification } from './statusAction.js' // Форматирование уведомлений для изменений статуса
 import { formatProjectCardStatusNotification } from './projectCardStatusNotifications.js' // Форматирование уведомлений для карточек проекта
+import { formUnassignedUserNotification } from './unassignedUserNotification.js'
+import { formAssignedUserNotification } from './addAssignedNotification.js'
 import { getTaskDetails } from '../../services/githubService.js' // Сервис для получения данных о задаче через GitHub API
 import dotenv from 'dotenv' // Модуль для работы с переменными окружения
 
@@ -25,13 +27,18 @@ function cleanupProcessedEvents(eventId) {
 // Обработчики событий GitHub Webhooks
 export const eventHandlers = {
 	issues: async payload => {
-		const { action, issue } = payload
-		// console.log('Получено событие: issues', { action, issue })
+		const { action, issue, assignee } = payload
+		// console.log('Получено событие: issues', { action, issue, assignee })
 
 		if (action === 'opened') {
 			return formatTaskNotification(issue)
 		} else if (['closed', 'reopened'].includes(action)) {
 			return formatStatusNotification(action, issue)
+		} else if (['unassigned'].includes(action)) {
+			// console.log(assignee)
+			return formUnassignedUserNotification(issue, assignee)
+		} else if (['assigned'].includes(action)) {
+			return formAssignedUserNotification(issue, assignee)
 		}
 		return null
 	},
@@ -112,7 +119,6 @@ async function getNodeID(payload) {
  * @param {object} payload - Данные, переданные с вебхуком.
  */
 // Универсальная функция обработки уведомлений.
-// Универсальная функция обработки уведомлений.
 export async function notify(event, payload) {
 	const eventId = `${event}-${
 		payload.issue?.id || payload.projects_v2_item?.id || ''
@@ -154,12 +160,21 @@ export async function notify(event, payload) {
 		let assignees = []
 		if (event === 'projects_v2_item') {
 			assignees = await getNodeID(payload) // Используем getNodeID
+		} else if (payload.action === 'unassigned' || 'assigned') {
+			const assignee = payload.assignee // Объект assignee
+			if (assignee && assignee.login) {
+				// Преобразуем объект в массив с одним элементом для унификации
+				assignees = [assignee]
+			} else {
+				console.log('Assignee отсутствует или невалидный:', assignee)
+			}
 		} else {
 			assignees =
 				payload.issue?.assignees ||
 				payload.assignees ||
 				notification.taskDetail?.assignees ||
 				[]
+			console.log(assignees)
 		}
 
 		if (!Array.isArray(assignees) || assignees.length === 0) {
@@ -198,7 +213,6 @@ export async function notify(event, payload) {
 							parse_mode: 'Markdown',
 						})
 					}
-
 					console.log(
 						`Уведомление отправлено: Telegram ID: ${user.telegram_id}, GitHub Username: ${assignee.login}`
 					)
