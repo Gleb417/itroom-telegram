@@ -174,292 +174,276 @@ export async function showPaginatedTasks(ctx, tasks, page) {
 
 // Обработка inline-запросов (выбор репозитория, проекта и задачи)
 // Обработка проекта (получение задач)
+// Вспомогательная функция для получения пользователя
+async function getUserFromContext(ctx) {
+  const chatId = ctx.chat.id;
+  const user = await db.User.findOne({ where: { telegram_id: chatId } });
+  if (!user || !user.github_token) {
+    await ctx.answerCallbackQuery();
+    await ctx.reply("Вы не авторизованы. Используйте /auth для авторизации.");
+    return null;
+  }
+  ctx.session.user = {
+    github_username: user.github_username, // Проверьте, есть ли это поле в базе
+    github_token: user.github_token,
+  };
+  return user;
+}
+
+// Вспомогательная функция для обработки ошибок
+async function handleError(
+  ctx,
+  error,
+  message = "Произошла ошибка. Попробуйте позже."
+) {
+  console.error(error);
+  await ctx.answerCallbackQuery();
+  await ctx.reply(message);
+}
+
+// Маппинг действий
+const actionHandlers = {
+  page: handlePageAction,
+  repo: handleRepoAction,
+  project: handleProjectAction,
+  deadline: handleDeadlineAction,
+  skip: handleSkipAction,
+  task: handleTaskAction,
+  tasks_page: handleTasksPageAction,
+  taskss_page: handleAdditionalTasksPageAction, // Новый обработчик
+};
+
+// Главная функция
 export async function handleInlineQuery(ctx) {
-  const action = ctx.callbackQuery.data;
-
   try {
-    const chatId = ctx.chat.id;
-    const user = await db.User.findOne({ where: { telegram_id: chatId } });
+    const action = ctx.callbackQuery.data;
+    const [prefix, ...args] = action.split("_");
 
-    if (!user || !user.github_token) {
-      await ctx.answerCallbackQuery();
-      return ctx.reply(
-        "Вы не авторизованы. Используйте /auth для авторизации."
-      );
-    }
+    const user = await getUserFromContext(ctx);
+    if (!user) return;
 
-    const userToken = user.github_token;
-
-    if (action.startsWith("page_")) {
-      // Обработка кнопок для перехода по страницам
-      const page = parseInt(action.split("_")[1], 10);
-      return await showRepositoryPage(ctx, page);
-    }
-
-    // Обработка репозитория
-    // Обработка репозитория
-    if (action.startsWith("repo_")) {
-      const repoId = action.split("_")[1];
-      const repositories = await getRepositories(userToken);
-      const selectedRepo = repositories.find(
-        (repo) => String(repo.id) === repoId
-      );
-
-      if (!selectedRepo) {
-        console.error("Репозиторий не найден. repoId:", repoId);
-        await ctx.answerCallbackQuery();
-        return ctx.reply("Репозиторий не найден.");
-      }
-
-      const projects = await getProjectsV2(
-        userToken,
-        selectedRepo.owner.login,
-        selectedRepo.name
-      );
-
-      if (!projects.length) {
-        await ctx.answerCallbackQuery();
-        return ctx.reply("В этом репозитории нет проектов.");
-      }
-
-      // Сохраняем проекты в сессии
-      ctx.session.projects = projects;
-      ctx.session.currentRepoId = repoId; // Сохраняем текущий репозиторий для контекста
-
-      // Показываем первую страницу проектов
-      await showProjectPage(ctx, 1);
-    }
-
-    // Обработка проекта (получение задач)
-    if (action.startsWith("project_")) {
-      const lastUnderscoreIndex = action.lastIndexOf("_");
-      const projectId = action.slice(8, lastUnderscoreIndex); // "project_" (8 символов)
-      const repoId = action.slice(lastUnderscoreIndex + 1);
-
-      const repositories = await getRepositories(userToken);
-      const selectedRepo = repositories.find(
-        (repo) => String(repo.id) === repoId
-      );
-
-      if (!selectedRepo) {
-        console.error("Репозиторий не найден. repoId:", repoId);
-        await ctx.answerCallbackQuery();
-        return ctx.reply("Репозиторий не найден.");
-      }
-
-      const tasks = await getTasks(userToken, projectId);
-
-      if (!tasks.length) {
-        return ctx.reply("В этом проекте нет задач.");
-      }
-
-      // Получаем поля проекта
-      const projectFields = await getProjectFields(userToken, projectId);
-
-      // Фильтруем поля, чтобы оставить только те, у которых dataType === 'DATE'
-      const dateFields = projectFields.filter(
-        (field) => field.dataType === "DATE"
-      );
-
-      const keyboard = new InlineKeyboard();
-
-      if (dateFields.length > 0) {
-        // Формируем кнопки для каждого поля с типом DATE
-        dateFields.forEach((field) => {
-          if (field.id && field.name) {
-            const buttonData = `deadline_${field.id}_${projectId}`;
-            // Убедитесь, что buttonData не содержит нежелательных символов или пробелов
-            if (buttonData && buttonData.length < 64) {
-              // Telegram API ограничивает длину строки
-              keyboard.text(field.name, buttonData).row();
-            } else {
-              console.error("Некорректные данные для кнопки:", buttonData);
-            }
-          } else {
-            console.error("Поле не содержит id или name:", field);
-          }
-        });
-      }
-
-      // Добавляем кнопку "Пропустить" в любом случае
-      keyboard.text("Пропустить", `skip_${projectId}`).row();
-      // Отправляем клавиатуру с кнопками
-      await ctx.answerCallbackQuery();
-      return ctx.reply("Выберите поле для сортировки по дедлайну:", {
-        reply_markup: keyboard,
-      });
-    }
-
-    // Обработка выбора поля для дедлайна или кнопки "Пропустить"
-    if (action.startsWith("deadline_")) {
-      const actionWithoutPrefix = action.slice(9);
-
-      const actionParts = actionWithoutPrefix.split("_");
-      const fieldId = actionParts.slice(0, actionParts.length - 2).join("_");
-      const projectId = actionParts.slice(actionParts.length - 2).join("_");
-
-      console.log("Полный полученный айди:", action);
-      console.log("Айди поля:", fieldId);
-      console.log("Айди проекта:", projectId);
-
-      const tasks = await getTasks(userToken, projectId);
-      const projectFields = await getProjectFields(userToken, projectId);
-      const deadlineField = projectFields.find((field) => field.id === fieldId);
-
-      if (!deadlineField) {
-        return ctx.reply("Не удалось найти выбранное поле.");
-      }
-
-      const tasksWithDetails = await Promise.all(
-        tasks.map(async (task) => {
-          const taskDetails = await getTaskDetails(userToken, task.id);
-          return { ...task, details: taskDetails };
-        })
-      );
-
-      const assignedTasks = tasksWithDetails.filter((task) => {
-        const assigneesString = task.details?.assignees;
-        if (!assigneesString) return false;
-
-        const assignees = assigneesString
-          .split(",")
-          .map((assignee) => assignee.trim());
-
-        return assignees.includes(user.github_username);
-      });
-
-      if (assignedTasks.length === 0) {
-        return ctx.reply("Вы не назначены на задачи в этом проекте.");
-      }
-
-      const sortedTasks = assignedTasks.sort((a, b) => {
-        const deadlineA = a.fields[deadlineField.name];
-        const deadlineB = b.fields[deadlineField.name];
-
-        if (!deadlineA || !deadlineB) return 0;
-
-        return new Date(deadlineA) - new Date(deadlineB);
-      });
-
-      // Сохраняем задачи в сессии
-      ctx.session.sortedTasks = sortedTasks;
-      ctx.session.deadlineField = deadlineField;
-
-      // Показываем первую страницу
-      await showTasksPage(ctx, sortedTasks, 1, deadlineField);
-    }
-
-    // Обработка кнопки "Пропустить"
-    // Обработка кнопки "Пропустить"
-    if (action.startsWith("tasks_page_")) {
-      const page = parseInt(action.split("_")[2], 10);
-      const sortedTasks = ctx.session.sortedTasks || [];
-      const deadlineField = ctx.session.deadlineField;
-
-      if (!sortedTasks.length) {
-        return ctx.reply("Задачи отсутствуют.");
-      }
-
-      await showTasksPage(ctx, sortedTasks, page, deadlineField);
-    }
-    if (action.startsWith("taskss_page_")) {
-      const page = parseInt(action.split("_")[2], 10);
-      const task = ctx.session.assignedTasks;
-      if (!task.length) {
-        return ctx.reply("Задачи отсутвуют.");
-      }
-      await showPaginatedTasks(ctx, task, page);
-    }
-
-    if (action.startsWith("skip_")) {
-      const actionParts = action.split("_");
-      const projectId = `${actionParts[1]}_${actionParts[2]}`;
-
-      try {
-        // Получаем задачи проекта
-        const tasks = await getTasks(userToken, projectId);
-        const tasksWithDetails = await Promise.all(
-          tasks.map(async (task) => {
-            const taskDetails = await getTaskDetails(userToken, task.id);
-            return { ...task, details: taskDetails };
-          })
-        );
-
-        // Фильтруем задачи по назначенному пользователю
-        const assignedTasks = tasksWithDetails.filter((task) => {
-          const assigneesString = task.details?.assignees;
-          if (!assigneesString) return false;
-
-          const assignees = assigneesString
-            .split(",")
-            .map((assignee) => assignee.trim());
-
-          return assignees.includes(user.github_username);
-        });
-
-        if (!assignedTasks.length) {
-          return ctx.reply("Вы не назначены на задачи в этом проекте.");
-        }
-
-        // Сохраняем задачи в сессии
-        ctx.session.assignedTasks = assignedTasks;
-
-        // Показываем страницу задач
-        await showPaginatedTasks(ctx, assignedTasks, 1);
-      } catch (error) {
-        console.error(
-          "Ошибка при обработке кнопки 'Пропустить':",
-          error.message
-        );
-        await ctx.reply(
-          "Произошла ошибка при обработке задач. Попробуйте позже."
-        );
-      }
-    }
-
-    // Обработка задачи (показ всей информации о задаче)
-    if (action.startsWith("task_")) {
-      const taskId = action.split("_").slice(1).join("_"); // Получаем правильный taskId
-      console.log("Полученный taskId:", taskId);
-
-      const task = await getTaskDetails(userToken, taskId);
-
-      if (!task) {
-        await ctx.answerCallbackQuery();
-        return ctx.reply(
-          "Задача не найдена или имеет неверную структуру данных."
-        );
-      }
-
-      const taskDetails = `
-📋 *Задача*: ${escapeMarkdown(task.title)}
-
-📝 *Описание*: ${escapeMarkdown(task.body || "Нет описания")}
-
-🔗 *Ссылка*: [Открыть задачу](${task.url})
-
-🕒 *Создана*: ${escapeMarkdown(new Date(task.createdAt).toLocaleString())}
-🔄 *Обновлена*: ${escapeMarkdown(new Date(task.updatedAt).toLocaleString())}
-
-👤 *Ответственный*: ${escapeMarkdown(task.assignees || "Не назначен")}`;
-
-      // Кнопка для комментариев
-      const keyboard = new InlineKeyboard().text(
-        "Показать комментарии",
-        `show_comments_${taskId}`
-      );
-
-      await ctx.answerCallbackQuery();
-      return ctx.reply(taskDetails, {
-        parse_mode: "MarkdownV2",
-        reply_markup: keyboard,
-      });
+    const handler = actionHandlers[prefix];
+    if (handler) {
+      await handler(ctx, args, user.github_token);
+    } else {
+      console.warn("Неизвестное действие:", action);
     }
   } catch (error) {
-    console.error("Ошибка в handleInlineQuery:", error);
-    await ctx.answerCallbackQuery();
-    ctx.reply("Произошла ошибка. Попробуйте позже.");
+    await handleError(ctx, error);
   }
+}
+
+// Обработчики действий
+async function handlePageAction(ctx, args, userToken) {
+  const page = parseInt(args[0], 10);
+  await showRepositoryPage(ctx, page);
+}
+
+async function handleRepoAction(ctx, args, userToken) {
+  const repoId = args[0];
+  const repositories = await getRepositories(userToken);
+  const selectedRepo = repositories.find((repo) => String(repo.id) === repoId);
+
+  if (!selectedRepo) {
+    return handleError(
+      ctx,
+      new Error(`Репозиторий не найден: ${repoId}`),
+      "Репозиторий не найден."
+    );
+  }
+
+  const projects = await getProjectsV2(
+    userToken,
+    selectedRepo.owner.login,
+    selectedRepo.name
+  );
+  if (!projects.length) {
+    return ctx.reply("В этом репозитории нет проектов.");
+  }
+
+  ctx.session.projects = projects;
+  ctx.session.currentRepoId = repoId;
+  await showProjectPage(ctx, 1);
+}
+
+async function handleProjectAction(ctx, args, userToken) {
+  const [prefix, uniqueId, repoId] = args;
+  const projectId = `${prefix}_${uniqueId}`;
+  const repositories = await getRepositories(userToken);
+  const selectedRepo = repositories.find((repo) => String(repo.id) === repoId);
+
+  if (!selectedRepo) {
+    return handleError(
+      ctx,
+      new Error(`Репозиторий не найден: ${repoId}`),
+      "Репозиторий не найден."
+    );
+  }
+
+  const tasks = await getTasks(userToken, projectId);
+  if (!tasks.length) {
+    return ctx.reply("В этом проекте нет задач.");
+  }
+
+  const projectFields = await getProjectFields(userToken, projectId);
+  const dateFields = projectFields.filter((field) => field.dataType === "DATE");
+
+  const keyboard = new InlineKeyboard();
+  dateFields.forEach((field) => {
+    const buttonData = `deadline_${field.id}_${projectId}`;
+    if (buttonData.length < 64) {
+      keyboard.text(field.name, buttonData).row();
+    }
+  });
+  keyboard.text("Пропустить", `skip_${projectId}`).row();
+
+  await ctx.answerCallbackQuery();
+  await ctx.reply("Выберите поле для сортировки по дедлайну:", {
+    reply_markup: keyboard,
+  });
+}
+
+// Обработчик для действия "deadline"
+async function handleDeadlineAction(ctx, args, userToken) {
+  const fieldId = `${args[0]}_${args[1]}`;
+  const projectId = `${args[2]}_${args[3]}`;
+
+  console.log("fieldId:", fieldId);
+  console.log("projectId:", projectId);
+
+  const tasks = await getTasks(userToken, projectId);
+  const projectFields = await getProjectFields(userToken, projectId);
+  const deadlineField = projectFields.find((field) => field.id === fieldId);
+
+  if (!deadlineField) {
+    return ctx.reply("Не удалось найти выбранное поле.");
+  }
+
+  const tasksWithDetails = await Promise.all(
+    tasks.map(async (task) => {
+      const taskDetails = await getTaskDetails(userToken, task.id);
+      return { ...task, details: taskDetails };
+    })
+  );
+
+  const assignedTasks = tasksWithDetails.filter((task) => {
+    const assigneesString = task.details?.assignees;
+    if (!assigneesString) return false;
+
+    const assignees = assigneesString
+      .split(",")
+      .map((assignee) => assignee.trim());
+
+    return assignees.includes(ctx.session.user.github_username);
+  });
+
+  if (!assignedTasks.length) {
+    return ctx.reply("Вы не назначены на задачи в этом проекте.");
+  }
+
+  const sortedTasks = assignedTasks.sort((a, b) => {
+    const deadlineA = a.fields[deadlineField.name];
+    const deadlineB = b.fields[deadlineField.name];
+    return new Date(deadlineA) - new Date(deadlineB);
+  });
+
+  ctx.session.sortedTasks = sortedTasks;
+  ctx.session.deadlineField = deadlineField;
+
+  await showTasksPage(ctx, sortedTasks, 1, deadlineField);
+}
+
+// Обработчик для действия "skip"
+async function handleSkipAction(ctx, args, userToken) {
+  const [prefix, uniqueId] = args;
+  const projectId = `${prefix}_${uniqueId}`;
+  console.log(args);
+  console.log(projectId);
+
+  try {
+    const tasks = await getTasks(userToken, projectId);
+    const tasksWithDetails = await Promise.all(
+      tasks.map(async (task) => {
+        const taskDetails = await getTaskDetails(userToken, task.id);
+        return { ...task, details: taskDetails };
+      })
+    );
+
+    const assignedTasks = tasksWithDetails.filter((task) => {
+      const assigneesString = task.details?.assignees;
+      if (!assigneesString) return false;
+
+      const assignees = assigneesString
+        .split(",")
+        .map((assignee) => assignee.trim());
+
+      return assignees.includes(ctx.session.user.github_username);
+    });
+
+    if (!assignedTasks.length) {
+      return ctx.reply("Вы не назначены на задачи в этом проекте.");
+    }
+
+    ctx.session.assignedTasks = assignedTasks;
+    await showPaginatedTasks(ctx, assignedTasks, 1);
+  } catch (error) {
+    await handleError(ctx, error, "Ошибка при обработке кнопки 'Пропустить'.");
+  }
+}
+
+// Обработчик для действия "task"
+async function handleTaskAction(ctx, args, userToken) {
+  const taskId = args.join("_"); // Полный ID задачи
+
+  const task = await getTaskDetails(userToken, taskId);
+
+  if (!task) {
+    return ctx.reply("Задача не найдена или имеет неверную структуру данных.");
+  }
+
+  const taskDetails = `
+📋 *Задача*: ${escapeMarkdown(task.title)}
+📝 *Описание*: ${escapeMarkdown(task.body || "Нет описания")}
+🔗 *Ссылка*: [Открыть задачу](${task.url})
+🕒 *Создана*: ${escapeMarkdown(new Date(task.createdAt).toLocaleString())}
+🔄 *Обновлена*: ${escapeMarkdown(new Date(task.updatedAt).toLocaleString())}
+👤 *Ответственный*: ${escapeMarkdown(task.assignees || "Не назначен")}
+`;
+
+  const keyboard = new InlineKeyboard().text(
+    "Показать комментарии",
+    `show_comments_${taskId}`
+  );
+
+  await ctx.reply(taskDetails, {
+    parse_mode: "MarkdownV2",
+    reply_markup: keyboard,
+  });
+}
+
+// Обработчик для действия "tasks_page"
+async function handleTasksPageAction(ctx, args, userToken) {
+  const page = parseInt(args[0], 10);
+  const sortedTasks = ctx.session.sortedTasks || [];
+  const deadlineField = ctx.session.deadlineField;
+
+  if (!sortedTasks.length) {
+    return ctx.reply("Задачи отсутствуют.");
+  }
+
+  await showTasksPage(ctx, sortedTasks, page, deadlineField);
+}
+
+// Обработчик для дополнительной пагинации (taskss_page)
+async function handleAdditionalTasksPageAction(ctx, args, userToken) {
+  const page = parseInt(args[0], 10);
+  const assignedTasks = ctx.session.assignedTasks || [];
+
+  if (!assignedTasks.length) {
+    return ctx.reply("Задачи отсутствуют.");
+  }
+
+  await showPaginatedTasks(ctx, assignedTasks, page);
 }
 
 // Экранирование Markdown
