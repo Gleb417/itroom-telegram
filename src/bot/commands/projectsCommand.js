@@ -69,10 +69,33 @@ export async function showRepositoryPage(ctx, page) {
     keyboard.text("Вперед ➡", `page_${page + 1}`);
   }
 
-  // Показываем текущую страницу
-  await ctx.reply(`Страница ${page} из ${totalPages}`, {
-    reply_markup: keyboard,
-  });
+  const text = `Страница ${page} из ${totalPages}`;
+
+  try {
+    if (ctx.session.lastMessageId) {
+      // Пробуем отредактировать предыдущее сообщение
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        ctx.session.lastMessageId,
+        text,
+        {
+          reply_markup: keyboard,
+        }
+      );
+    } else {
+      // Если сообщения нет, отправляем новое
+      const sentMessage = await ctx.reply(text, { reply_markup: keyboard });
+      ctx.session.lastMessageId = sentMessage.message_id; // Сохраняем ID нового сообщения
+    }
+  } catch (error) {
+    if (error.description.includes("message can't be edited")) {
+      // Если сообщение не может быть отредактировано, отправляем новое
+      const sentMessage = await ctx.reply(text, { reply_markup: keyboard });
+      ctx.session.lastMessageId = sentMessage.message_id; // Сохраняем ID нового сообщения
+    } else {
+      console.error("Ошибка в showRepositoryPage:", error);
+    }
+  }
 }
 
 // Показать проекты с пагинацией
@@ -101,7 +124,7 @@ export async function showProjectPage(ctx, page) {
     keyboard.text("Вперед ➡", `project_page_${page + 1}`);
   }
 
-  await ctx.reply(`Проекты. Страница ${page} из ${totalPages}`, {
+  await ctx.editMessageText(`Проекты. Страница ${page} из ${totalPages}`, {
     reply_markup: keyboard,
   });
 }
